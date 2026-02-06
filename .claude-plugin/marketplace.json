@@ -1,0 +1,17 @@
+{
+  "name": "crjfisher-plugins",
+  "owner": { "name": "crjfisher" },
+  "metadata": {
+    "description": "Claude Code plugins by crjfisher"
+  },
+  "plugins": [
+    {
+      "name": "spinoff",
+      "source": "./",
+      "description": "Spin off autonomous Claude agents in isolated git worktrees with sandbox isolation",
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": ["worktree", "git", "wezterm", "sandbox", "spinoff"]
+    }
+  ]
+}

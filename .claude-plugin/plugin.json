@@ -1,0 +1,9 @@
+{
+  "name": "spinoff",
+  "version": "1.0.0",
+  "description": "Spin off autonomous Claude agents in isolated git worktrees with WezTerm tabs and sandbox isolation",
+  "author": { "name": "crjfisher" },
+  "repository": "https://github.com/crjfisher/spinoff",
+  "license": "MIT",
+  "keywords": ["worktree", "git", "parallel-development", "wezterm", "sandbox", "autonomous-agents"]
+}
