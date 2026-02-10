@@ -106,7 +106,7 @@ def get_worktree_info(worktree_path: Path) -> Optional[tuple[str, str]]:
 
 def merge_worktree(
     worktree_name: str,
-    target_branch: str = "main",
+    target_branch: Optional[str] = None,
     strategy: str = "merge",  # "merge", "squash", or "rebase"
     delete_branch: bool = True,
     project_path: Optional[Path] = None,
@@ -116,7 +116,7 @@ def merge_worktree(
 
     Args:
         worktree_name: Name of the worktree to merge
-        target_branch: Branch to merge into (default: main)
+        target_branch: Branch to merge into (default: stored base_branch, or "main")
         strategy: Merge strategy - "merge", "squash", or "rebase"
         delete_branch: Whether to delete the branch after merge
         project_path: Path to the main repository (auto-detected if not provided)
@@ -146,24 +146,48 @@ def merge_worktree(
             [],
         )
 
-    # Step 2: Close WezTerm tab (if pane_id exists in state)
-    # Note: Sandbox processes exit automatically when the tab closes
+    # Load state to get entry info (base_branch, pane_id)
     state = load_state(project_path)
     entry = state.find(worktree_name)
-    if entry and entry.pane_id and wezterm_available():
-        if pane_exists(entry.pane_id):
-            success, msg = close_tab(entry.pane_id)
-            if not success:
-                warnings.append(msg)
 
-    # Step 3: Check for uncommitted changes
+    # Resolve target branch: explicit arg > stored base_branch > "main"
+    if target_branch is None:
+        if entry and entry.base_branch:
+            target_branch = entry.base_branch
+        else:
+            target_branch = "main"
+
+    # Step 2: Validate BEFORE closing WezTerm tab
+    # Check for uncommitted changes
     has_changes, status = has_uncommitted_changes(worktree_path)
     if has_changes:
         return MergeResult(
             False,
             f"Error: Worktree has uncommitted changes. Commit or stash first:\n{status}",
-            warnings,
+            [],
         )
+
+    # Validate target branch exists
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", target_branch],
+        capture_output=True,
+        text=True,
+        cwd=project_path,
+    )
+    if result.returncode != 0:
+        return MergeResult(
+            False,
+            f"Error: Target branch '{target_branch}' does not exist",
+            [],
+        )
+
+    # Step 3: Close WezTerm tab (if pane_id exists in state)
+    # Only close now that we're confident the merge will proceed
+    if entry and entry.pane_id and wezterm_available():
+        if pane_exists(entry.pane_id):
+            success, msg = close_tab(entry.pane_id)
+            if not success:
+                warnings.append(msg)
 
     # Step 4: Checkout target branch in main repo
     current_branch = get_current_branch()
@@ -293,8 +317,8 @@ def main():
     parser.add_argument("worktree_name", help="Name of the worktree to merge")
     parser.add_argument(
         "-t", "--target",
-        default="main",
-        help="Target branch to merge into (default: main)",
+        default=None,
+        help="Target branch to merge into (default: stored base branch, or main)",
     )
     parser.add_argument(
         "-s", "--strategy",
