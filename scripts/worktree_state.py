@@ -2,23 +2,27 @@
 """
 Worktree State Management
 
-Manages the .claude/worktrees.local.md state file for tracking active worktrees.
+Manages the .claude/worktrees.local.json state file for tracking active worktrees.
 
-State file format (YAML frontmatter in markdown):
----
-worktrees:
-  - name: fix-auth
-    path: .worktrees/fix-auth
-    branch: worktree/fix-auth
-    pane_id: "42"
-    status: active
----
+State file format (JSON):
+{
+  "worktrees": [
+    {
+      "name": "fix-auth",
+      "path": ".worktrees/fix-auth",
+      "branch": "worktree/fix-auth",
+      "base_branch": "main",
+      "pane_id": "42",
+      "status": "active"
+    }
+  ]
+}
 """
 # /// script
 # requires-python = ">=3.11"
 # ///
 
-import re
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -30,17 +34,20 @@ class WorktreeEntry:
     name: str
     path: str
     branch: str
-    pane_id: Optional[str] = None   # WezTerm pane ID (may be None if tab was closed)
+    base_branch: Optional[str] = None  # Branch the worktree was created from
+    pane_id: Optional[str] = None      # WezTerm pane ID (may be None if tab was closed)
     status: str = "active"
 
-    def to_yaml_dict(self) -> dict:
-        """Convert to dict for YAML output."""
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON output."""
         d = {
             "name": self.name,
             "path": self.path,
             "branch": self.branch,
             "status": self.status,
         }
+        if self.base_branch is not None:
+            d["base_branch"] = self.base_branch
         if self.pane_id is not None:
             d["pane_id"] = self.pane_id
         return d
@@ -76,7 +83,7 @@ class WorktreeState:
 
 def get_state_file_path(project_path: Path) -> Path:
     """Get the path to the state file for a project."""
-    return project_path / ".claude" / "worktrees.local.md"
+    return project_path / ".claude" / "worktrees.local.json"
 
 
 def load_state(project_path: Path) -> WorktreeState:
@@ -88,48 +95,21 @@ def load_state(project_path: Path) -> WorktreeState:
         return state
 
     content = state_file.read_text()
-
-    # Extract YAML frontmatter
-    match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    if not match:
+    if not content.strip():
         return state
 
-    frontmatter = match.group(1)
+    data = json.loads(content)
 
-    # Parse worktrees list (simple YAML parsing)
-    worktrees_match = re.search(r"^worktrees:\s*\n((?:  - .*\n(?:    .*(?:\n|$))*)*)", frontmatter, re.MULTILINE)
-    if worktrees_match:
-        worktrees_block = worktrees_match.group(1)
-
-        # Split into individual worktree entries
-        entries = re.split(r"(?=  - name:)", worktrees_block)
-        for entry_text in entries:
-            if not entry_text.strip():
-                continue
-
-            entry = WorktreeEntry(name="", path="", branch="")
-
-            # Parse each field
-            for line in entry_text.strip().split("\n"):
-                line = line.strip().lstrip("- ")
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    key = key.strip()
-                    value = value.strip()
-
-                    if key == "name":
-                        entry.name = value
-                    elif key == "path":
-                        entry.path = value
-                    elif key == "branch":
-                        entry.branch = value
-                    elif key == "pane_id":
-                        entry.pane_id = value if value else None
-                    elif key == "status":
-                        entry.status = value
-
-            if entry.name:
-                state.worktrees.append(entry)
+    for wt_data in data.get("worktrees", []):
+        entry = WorktreeEntry(
+            name=wt_data["name"],
+            path=wt_data["path"],
+            branch=wt_data["branch"],
+            base_branch=wt_data.get("base_branch"),
+            pane_id=wt_data.get("pane_id"),
+            status=wt_data.get("status", "active"),
+        )
+        state.worktrees.append(entry)
 
     return state
 
@@ -141,27 +121,13 @@ def save_state(project_path: Path, state: WorktreeState) -> None:
     # Ensure .claude directory exists
     state_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build YAML content
-    lines = ["---"]
-
-    lines.append("worktrees:")
-    if state.worktrees:
-        for wt in state.worktrees:
-            lines.append(f"  - name: {wt.name}")
-            lines.append(f"    path: {wt.path}")
-            lines.append(f"    branch: {wt.branch}")
-            lines.append(f"    status: {wt.status}")
-            if wt.pane_id is not None:
-                lines.append(f"    pane_id: {wt.pane_id}")
-    else:
-        lines.append("  []")
-
-    lines.append("---")
-    lines.append("")  # Trailing newline
+    data = {
+        "worktrees": [wt.to_dict() for wt in state.worktrees],
+    }
 
     # Write atomically via temp file
     temp_file = state_file.with_suffix(".tmp")
-    temp_file.write_text("\n".join(lines))
+    temp_file.write_text(json.dumps(data, indent=2) + "\n")
     temp_file.rename(state_file)
 
 
@@ -170,6 +136,7 @@ def add_worktree(
     name: str,
     worktree_path: str,
     branch: str,
+    base_branch: Optional[str] = None,
     pane_id: Optional[str] = None,
 ) -> WorktreeState:
     """Add a worktree to the state file."""
@@ -179,6 +146,7 @@ def add_worktree(
         name=name,
         path=worktree_path,
         branch=branch,
+        base_branch=base_branch,
         pane_id=pane_id,
         status="active",
     )
@@ -210,6 +178,8 @@ def cmd_list(project_path: Path) -> None:
         flags = []
         if wt.pane_id is not None:
             flags.append(f"pane:{wt.pane_id}")
+        if wt.base_branch:
+            flags.append(f"base:{wt.base_branch}")
         flag_str = f" [{', '.join(flags)}]" if flags else ""
         print(f"  {wt.name}: {wt.path}{flag_str}")
 
@@ -226,6 +196,7 @@ def cmd_show(project_path: Path, name: str) -> None:
     print(f"Name:         {entry.name}")
     print(f"Path:         {entry.path}")
     print(f"Branch:       {entry.branch}")
+    print(f"Base Branch:  {entry.base_branch or 'N/A'}")
     print(f"Status:       {entry.status}")
     print(f"Pane ID:      {entry.pane_id or 'N/A'}")
 
