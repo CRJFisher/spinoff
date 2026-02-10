@@ -1,7 +1,6 @@
 ---
 name: init
 description: Initialize a project for spinoff support. Analyzes tech stack and creates spinoff config.
-disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep, Write, Edit
 ---
 
@@ -170,7 +169,7 @@ Merges spinoff back to target branch and cleans up.
 
 ## State File Location
 
-Worktree state is tracked in `.claude/worktrees.local.md` (YAML frontmatter format).
+Worktree state is tracked in `.claude/worktrees.local.json`.
 
 You can inspect state with:
 

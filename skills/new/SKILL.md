@@ -2,7 +2,6 @@
 name: new
 description: Spin off a new autonomous Claude agent in an isolated git worktree with WezTerm tab and sandbox.
 argument-hint: <task-name> [--base <branch>] [--task <description>] [--permission-mode <mode>]
-disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
 ---
 
@@ -79,24 +78,19 @@ If no task name provided, ask the user for a descriptive task name. Good example
 Search for existing task or spec files that match the task name:
 
 **Spec-Kit files** (check `specs/` directory):
-```bash
-# Find specs matching task name (fuzzy match)
-find specs -type d -iname "*<task-name>*" 2>/dev/null
-ls specs/*/spec.md specs/*/plan.md specs/*/tasks.md 2>/dev/null
-```
+Use the Glob tool to find specs matching the task name:
+- `specs/**/*<task-name>*` — directories/files matching the task name
+- `specs/*/spec.md`, `specs/*/plan.md`, `specs/*/tasks.md` — standard spec files
 
 **Backlog tasks** (check `backlog/tasks/` directory):
-```bash
-# Find task files matching task name
-find backlog/tasks -type f -iname "*<task-name>*.md" 2>/dev/null
-```
+Use the Glob tool:
+- `backlog/tasks/*<task-name>*.md` — task files matching the name
 
 **General task/spec patterns**:
-```bash
-# Look for any task/spec files with matching names
-find . -type f \( -name "*<task-name>*.md" -o -name "*<task-name>*.yaml" \) \
-  -path "*/specs/*" -o -path "*/tasks/*" -o -path "*/backlog/*" 2>/dev/null | head -10
-```
+Use the Glob tool with broader patterns:
+- `**/specs/*<task-name>*.md`
+- `**/tasks/*<task-name>*.md`
+- `**/backlog/*<task-name>*.md`
 
 If matching files are found:
 - List them to the user for confirmation

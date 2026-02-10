@@ -2,7 +2,6 @@
 name: merge
 description: Merge a spinoff's changes back to target branch with cleanup of WezTerm tabs and git branches.
 argument-hint: [spinoff-name] [--target <branch>] [--strategy <merge|squash|rebase>] [--keep-branch]
-disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
 ---
 
@@ -28,7 +27,7 @@ This command handles WezTerm tab cleanup automatically. Sandbox processes exit w
 - `/spinoff:merge fix-auth-bug --keep-branch` - Don't delete branch after merge
 
 **Options:**
-- `--target <branch>` - Target branch to merge into (default: main)
+- `--target <branch>` - Target branch to merge into (default: branch the spinoff was created from, or main)
 - `--strategy <merge|squash|rebase>` - Merge strategy (default: merge)
 - `--keep-branch` - Keep the worktree branch after merge
 
