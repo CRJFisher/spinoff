@@ -214,41 +214,6 @@ def create_tab(
     return True, pane_id, f"Created tab '{title}' (pane {pane_id})"
 
 
-def send_text_to_pane(
-    pane_id: str,
-    text: str,
-    delay_seconds: float = 2.0,
-) -> tuple[bool, str]:
-    """
-    Send text to a WezTerm pane and press Enter.
-
-    Waits for a delay to allow Claude to boot before sending the text.
-    The delay may need tuning based on system performance.
-
-    Args:
-        pane_id: WezTerm pane ID
-        text: Text to send (task description)
-        delay_seconds: Seconds to wait before sending (for Claude startup)
-
-    Returns:
-        (success, message)
-    """
-    # Wait for Claude to finish booting up
-    # TODO: Could be smarter - poll pane output for ">" prompt
-    if delay_seconds > 0:
-        time.sleep(delay_seconds)
-
-    # Include literal newline to submit the command
-    result = subprocess.run(
-        ["wezterm", "cli", "send-text", "--pane-id", pane_id, "--no-paste", text + "\n"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return False, f"Error sending text: {result.stderr}"
-    return True, "Text sent"
-
-
 def close_tab(pane_id: str) -> tuple[bool, str]:
     """
     Close a WezTerm tab/pane by its ID.
@@ -363,13 +328,6 @@ if __name__ == "__main__":
             if pane_id:
                 print(f"Pane ID: {pane_id}")
 
-        elif cmd == "send" and len(sys.argv) > 3:
-            pane_id = sys.argv[2]
-            text = sys.argv[3]
-            delay = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
-            success, msg = send_text_to_pane(pane_id, text, delay)
-            print(msg)
-
         elif cmd == "close" and len(sys.argv) > 2:
             pane_id = sys.argv[2]
             success, msg = close_tab(pane_id)
@@ -391,7 +349,6 @@ if __name__ == "__main__":
         else:
             print("Usage:")
             print("  worktree_wezterm.py create <title> [cwd] [workspace] [command...]")
-            print("  worktree_wezterm.py send <pane_id> <text> [delay_seconds]")
             print("  worktree_wezterm.py close <pane_id>")
             print("  worktree_wezterm.py title <pane_id> <title>")
             print("  worktree_wezterm.py list")
