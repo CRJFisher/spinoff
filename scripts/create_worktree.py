@@ -8,14 +8,14 @@ Each worktree gets a sandboxed Claude session in a WezTerm tab.
 Flow:
 1. Create git worktree
 2. Copy state files (.env, etc.)
-3. Run build command
-4. Open WezTerm tab with Claude (sandbox enabled via --settings flag)
+3. Open WezTerm tab that chains build command + Claude (sandbox enabled via --settings flag)
 """
 # /// script
 # requires-python = ">=3.11"
 # ///
 
 import argparse
+import shlex
 import shutil
 import subprocess
 import sys
@@ -74,8 +74,24 @@ Examples:
     # Load project config
     config = load_config(repo_root)
 
-    # Sanitize task name
+    # Sanitize and validate task name
     safe_name = args.task_name.replace("/", "-").replace(" ", "-").lower()
+    safe_name = safe_name.strip("-")
+
+    if not safe_name or safe_name in (".", ".."):
+        print(f"Error: Invalid task name: '{args.task_name}'", file=sys.stderr)
+        sys.exit(1)
+    if safe_name.startswith("-") or safe_name.startswith("."):
+        print(f"Error: Task name cannot start with '-' or '.': '{safe_name}'", file=sys.stderr)
+        sys.exit(1)
+    if ".." in safe_name:
+        print(f"Error: Task name cannot contain '..': '{safe_name}'", file=sys.stderr)
+        sys.exit(1)
+    if not all(c.isalnum() or c in "-_" for c in safe_name):
+        print(f"Error: Task name contains invalid characters: '{safe_name}'", file=sys.stderr)
+        print("  Use only letters, numbers, hyphens, and underscores.", file=sys.stderr)
+        sys.exit(1)
+
     worktree_path = repo_root / config.worktree_dir / safe_name
     branch_name = f"worktree/{safe_name}"
 
@@ -106,21 +122,25 @@ Examples:
             shutil.copy2(src, dest)
             print(f"  Copied: {f}")
 
-    # Run build command
-    if config.build_command:
-        print(f"  Running: {config.build_command}")
-        subprocess.run(config.build_command, shell=True, cwd=worktree_path, check=True)
-
     # Build claude command (pass task as positional arg if provided)
-    exec_cmd = get_claude_command(task=args.task, permission_mode=args.permission_mode)
+    claude_cmd = get_claude_command(task=args.task, permission_mode=args.permission_mode)
     tab_title = f"wt: {safe_name}"
+
+    # Chain build command and claude command in the WezTerm tab
+    # Build runs in the tab so the user isn't blocked, and errors are visible there
+    if config.build_command:
+        print(f"  Build will run in WezTerm tab: {config.build_command}")
+        claude_cmd_str = " ".join(shlex.quote(c) for c in claude_cmd)
+        tab_cmd = ["bash", "-c", f"{config.build_command} && {claude_cmd_str}"]
+    else:
+        tab_cmd = claude_cmd
 
     # Create WezTerm tab in project-specific workspace
     print("  Opening WezTerm tab...")
     success, pane_id, msg = create_tab(
         title=tab_title,
         cwd=worktree_path,
-        command=exec_cmd,
+        command=tab_cmd,
         workspace=config.project_name,
     )
     if not success:
@@ -133,6 +153,7 @@ Examples:
         name=safe_name,
         worktree_path=str(worktree_path.relative_to(repo_root)),
         branch=branch_name,
+        base_branch=base,
         pane_id=pane_id,
     )
 
