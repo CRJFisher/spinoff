@@ -80,3 +80,70 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
     }
 
     config_file.write_text(json.dumps(data, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    import argparse
+    import subprocess
+    import sys
+
+    # Try to detect project root
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True
+        )
+        default_project = Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        default_project = Path.cwd()
+
+    parser = argparse.ArgumentParser(
+        description="Manage spinoff configuration",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  spinoff_config.py show
+  spinoff_config.py save --project-name my-app --build-command "pnpm install"
+  spinoff_config.py save --project-name my-app --state-files .env .env.local
+""",
+    )
+    parser.add_argument(
+        "-p", "--project",
+        type=Path,
+        default=default_project,
+        help=f"Project path (default: {default_project})",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # show command
+    subparsers.add_parser("show", help="Show current configuration")
+
+    # save command
+    save_parser = subparsers.add_parser("save", help="Save configuration")
+    save_parser.add_argument("--project-name", required=True, help="Project name")
+    save_parser.add_argument("--state-files", nargs="*", default=[], help="State files to copy")
+    save_parser.add_argument("--build-command", default="", help="Build command")
+    save_parser.add_argument("--worktree-dir", default=".worktrees", help="Worktree directory")
+
+    args = parser.parse_args()
+
+    if args.command == "show":
+        config = load_config(args.project)
+        print(f"Project:       {config.project_name}")
+        print(f"State files:   {config.state_files}")
+        print(f"Build command: {config.build_command}")
+        print(f"Worktree dir:  {config.worktree_dir}")
+        print(f"Config file:   {args.project / CONFIG_FILENAME}")
+    elif args.command == "save":
+        config = SpinoffConfig(
+            project_name=args.project_name,
+            state_files=args.state_files,
+            build_command=args.build_command,
+            worktree_dir=args.worktree_dir,
+        )
+        save_config(args.project, config)
+        print(f"Saved config to {args.project / CONFIG_FILENAME}")
+    else:
+        parser.print_help()
+        sys.exit(1)
