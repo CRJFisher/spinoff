@@ -51,8 +51,8 @@ def get_claude_command(task: Optional[str] = None, sandbox: bool = True, permiss
             }
         }
         cmd.extend(["--settings", json.dumps(settings)])
-
-    if permission_mode:
+        cmd.append("--dangerously-skip-permissions")
+    elif permission_mode:
         cmd.extend(["--permission-mode", permission_mode])
 
     if task:
@@ -65,5 +65,5 @@ if __name__ == "__main__":
     print("Claude Code Sandbox Configuration for Worktrees")
     print("=" * 50)
     print(f"Claude CLI available: {claude_available()}")
-    print(f"\nClaude command (default): {' '.join(get_claude_command())}")
-    print(f"Claude command (bypassPermissions): {' '.join(get_claude_command(permission_mode='bypassPermissions'))}")
+    print(f"\nClaude command (sandbox): {' '.join(get_claude_command())}")
+    print(f"Claude command (no sandbox): {' '.join(get_claude_command(sandbox=False))}")
