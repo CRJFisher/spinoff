@@ -101,6 +101,41 @@ Example: If user runs `/spinoff:new feat-auth` and `specs/auth/spec.md` exists, 
 --task "Implement feature. Relevant files: specs/auth/spec.md, specs/auth/plan.md, specs/auth/tasks.md"
 ```
 
+### 4a. Verify Referenced Files Exist and Are Committed
+
+Before creating the worktree, verify that all referenced files exist and are committed to the base branch. Files that aren't committed to the base won't be available in the new worktree.
+
+**1. Collect all referenced file paths:**
+- Files discovered by Glob in step 4 (spec files, task files)
+- Files the user explicitly mentioned in their request or `--task` description
+- Any other files discussed in the conversation that the task depends on
+
+**2. Determine the base branch:**
+Use `--base` arg if provided, otherwise the current branch:
+```bash
+git rev-parse --abbrev-ref HEAD
+```
+
+**3. Check each file exists and is committed** to the base branch:
+```bash
+git cat-file -e <base>:<relative-path> 2>/dev/null
+```
+Non-zero exit means the file doesn't exist on the base branch (untracked, uncommitted, or only on a different branch).
+
+**4. If all files exist on the base branch:** Proceed to step 5.
+
+**5. If any files are missing:**
+- List the problematic files to the user.
+- Explain: "These files don't exist or aren't committed to `<base>`. They won't be available in the new worktree."
+- **If base is the current branch** (common case): Offer to commit them:
+  ```bash
+  git add <file1> <file2> ...
+  git commit -m "Add task files for <task-name>"
+  ```
+- **If base is a different branch** (`--base` specified): Warn the user. Suggest they commit the files to the base branch first, or proceed without them.
+- **If user declines to commit**: Ask if they want to proceed anyway (the task description will still reference the paths, but the agent won't be able to read them).
+- **Do NOT proceed silently** — always surface the issue.
+
 ### 5. Execute the Script
 
 Run the spinoff creation script with parsed arguments:
