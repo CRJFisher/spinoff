@@ -2,7 +2,7 @@
 """
 Worktree State Management
 
-Manages the .claude/worktrees.local.json state file for tracking active worktrees.
+Manages the .worktrees/.state.json state file for tracking active worktrees.
 
 State file format (JSON):
 {
@@ -83,11 +83,27 @@ class WorktreeState:
 
 def get_state_file_path(project_path: Path) -> Path:
     """Get the path to the state file for a project."""
+    return project_path / ".worktrees" / ".state.json"
+
+
+def _get_legacy_state_file_path(project_path: Path) -> Path:
+    """Get the old state file path for migration."""
     return project_path / ".claude" / "worktrees.local.json"
+
+
+def _migrate_legacy_state(project_path: Path) -> None:
+    """Migrate state from .claude/worktrees.local.json to .worktrees/.state.json."""
+    legacy = _get_legacy_state_file_path(project_path)
+    new = get_state_file_path(project_path)
+    if legacy.exists() and not new.exists():
+        new.parent.mkdir(parents=True, exist_ok=True)
+        new.write_text(legacy.read_text())
+        legacy.unlink()
 
 
 def load_state(project_path: Path) -> WorktreeState:
     """Load worktree state from the project's state file."""
+    _migrate_legacy_state(project_path)
     state_file = get_state_file_path(project_path)
     state = WorktreeState()
 
@@ -118,7 +134,7 @@ def save_state(project_path: Path, state: WorktreeState) -> None:
     """Save worktree state to the project's state file."""
     state_file = get_state_file_path(project_path)
 
-    # Ensure .claude directory exists
+    # Ensure .worktrees directory exists
     state_file.parent.mkdir(parents=True, exist_ok=True)
 
     data = {

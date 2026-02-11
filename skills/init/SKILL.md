@@ -169,7 +169,7 @@ Merges spinoff back to target branch and cleans up.
 
 ## State File Location
 
-Worktree state is tracked in `.claude/worktrees.local.json`.
+Worktree state is tracked in `.worktrees/.state.json`.
 
 You can inspect state with:
 
