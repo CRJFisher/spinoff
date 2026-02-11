@@ -3,6 +3,7 @@
 A Claude Code plugin that spins off autonomous Claude agents into isolated git worktrees with WezTerm tabs and sandbox isolation.
 
 Each spinoff gets:
+
 - An isolated git worktree with its own branch
 - A dedicated WezTerm tab
 - Claude Code running in sandbox mode
@@ -55,11 +56,19 @@ Spin off a new autonomous Claude agent in an isolated worktree.
 
 **Options:**
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--base <branch>` | current branch | Base branch for the worktree |
-| `--task <description>` | none | Task description for the Claude agent |
-| `--permission-mode <mode>` | `plan` | Claude permission mode |
+| Option                     | Default        | Description                           |
+| -------------------------- | -------------- | ------------------------------------- |
+| `--base <branch>`          | current branch | Base branch for the worktree          |
+| `--task <description>`     | none           | Task description for the Claude agent |
+| `--permission-mode <mode>` | `plan`         | Claude permission mode                |
+
+### `/spinoff:list`
+
+List all active spinoffs with their status, branch, and WezTerm pane liveness.
+
+```
+/spinoff:list
+```
 
 ### `/spinoff:merge <name>`
 
@@ -74,11 +83,11 @@ Merge a spinoff back to the target branch with full cleanup.
 
 **Options:**
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--target <branch>` | `main` | Branch to merge into |
+| Option              | Default | Description                    |
+| ------------------- | ------- | ------------------------------ |
+| `--target <branch>` | `main`  | Branch to merge into           |
 | `--strategy <mode>` | `merge` | `merge`, `squash`, or `rebase` |
-| `--keep-branch` | false | Keep the branch after merge |
+| `--keep-branch`     | false   | Keep the branch after merge    |
 
 ## How It Works
 
@@ -86,16 +95,18 @@ Merge a spinoff back to the target branch with full cleanup.
 Your repo/
 ├── .claude/
 │   └── spinoff.json          # Project config (created by /spinoff:init)
-├── .worktrees/                # Ignored by git
-│   ├── fix-auth/              # Worktree 1 (branch: worktree/fix-auth)
-│   └── feat-dark-mode/        # Worktree 2 (branch: worktree/feat-dark-mode)
+├── .worktrees/               # Ignored by git
+│   ├── .state.json           # Worktree state tracking
+│   ├── fix-auth/             # Worktree 1 (branch: worktree/fix-auth)
+│   └── feat-dark-mode/       # Worktree 2 (branch: worktree/feat-dark-mode)
 └── src/
     └── ...
 ```
 
 1. **`/spinoff:init`** detects your stack and writes `.claude/spinoff.json`
-2. **`/spinoff:new`** creates a git worktree, copies state files, runs the build, and opens a WezTerm tab with a sandboxed Claude agent
-3. **`/spinoff:merge`** merges changes back, closes the tab, removes the worktree, and deletes the branch
+2. **`/spinoff:new`** creates a git worktree, copies state files, tracks state in `.worktrees/.state.json`, runs the build, and opens a WezTerm tab with a sandboxed Claude agent
+3. **`/spinoff:list`** shows all tracked spinoffs and their WezTerm pane status
+4. **`/spinoff:merge`** validates preconditions, merges changes back, closes the tab, removes the worktree, and deletes the branch
 
 Each spinoff runs in Claude Code's native sandbox — near-zero overhead, instant startup, no Docker required.
 
@@ -111,6 +122,42 @@ The `.claude/spinoff.json` file stores per-project settings:
   "worktree_dir": ".worktrees"
 }
 ```
+
+## Usage Patterns
+
+### Plan Competition (N-Plan)
+
+A workflow where the parent agent spawns N Plan sub-agents in parallel to explore different approaches, compares their plans, then uses `/spinoff:new` for sandboxed implementation.
+
+**1. Spawn N Plan agents in parallel**
+
+The parent agent launches multiple Plan agents using the `Task` tool, each independently exploring the codebase and proposing an approach:
+
+```
+Use the Task tool to spawn 3 Plan agents in parallel (all in one message):
+
+- Task 1: subagent_type=Plan, prompt="Plan approach A for <task description>"
+- Task 2: subagent_type=Plan, prompt="Plan approach B for <task description>"
+- Task 3: subagent_type=Plan, prompt="Plan approach C for <task description>"
+```
+
+Each Plan agent has access to Glob, Grep, and Read — they explore the codebase and return a proposed implementation plan.
+
+**2. Compare and synthesize**
+
+All N results return into the parent's context. The parent agent:
+
+- Identifies common ground and divergences across plans
+- Evaluates unique strengths of each approach
+- Synthesizes the best elements into a single recommended plan
+
+**3. Spinoff for implementation**
+
+```
+/spinoff:new <task-name> --task "<synthesized plan>"
+```
+
+The synthesized plan gets implemented in a sandboxed worktree while the parent continues other work.
 
 ## License
 
