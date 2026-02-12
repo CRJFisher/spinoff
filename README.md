@@ -19,8 +19,9 @@ Each spinoff gets:
 
 ### From GitHub
 
-```bash
-claude plugin add crjfisher/spinoff
+```shell
+/plugin marketplace add CRJFisher/spinoff
+/plugin install spinoff@CRJFisher-spinoff
 ```
 
 ### Local development
