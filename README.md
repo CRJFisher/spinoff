@@ -52,16 +52,23 @@ Spin off a new autonomous Claude agent in an isolated worktree.
 /spinoff:new fix-auth-bug
 /spinoff:new feat-dark-mode --base develop
 /spinoff:new JIRA-1234 --task "Implement user profile page"
-/spinoff:new fix-bug --permission-mode bypassPermissions
+/spinoff:new explore-auth --task "analyze the auth architecture" --mode plan
 ```
+
+**Modes:**
+
+| Mode | Description |
+| ---- | ----------- |
+| `implement` | Sandboxed execution — agent can write files, run commands, and auto-commits before finishing |
+| `plan` | Read-only exploration — agent uses `--permission-mode plan`, no sandbox |
 
 **Options:**
 
-| Option                     | Default        | Description                           |
-| -------------------------- | -------------- | ------------------------------------- |
-| `--base <branch>`          | current branch | Base branch for the worktree          |
-| `--task <description>`     | none           | Task description for the Claude agent |
-| `--permission-mode <mode>` | `plan`         | Claude permission mode                |
+| Option                 | Default              | Description                                   |
+| ---------------------- | -------------------- | --------------------------------------------- |
+| `--base <branch>`      | current branch       | Base branch for the worktree                  |
+| `--task <description>` | none                 | Task description for the Claude agent         |
+| `--mode <mode>`        | project default_mode | `plan` (read-only) or `implement` (sandbox)   |
 
 ### `/spinoff:list`
 
@@ -120,7 +127,8 @@ The `.claude/spinoff.json` file stores per-project settings:
   "project_name": "my-app",
   "state_files": [".env", ".env.local"],
   "build_command": "pnpm install",
-  "worktree_dir": ".worktrees"
+  "worktree_dir": ".worktrees",
+  "default_mode": "implement"
 }
 ```
 

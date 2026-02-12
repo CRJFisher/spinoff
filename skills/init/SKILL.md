@@ -71,6 +71,11 @@ Show the user:
 - State files to copy
 - Build command
 
+Ask the user their preferred default mode for spinoff agents:
+> "When spinning off tasks, should the default be **plan** mode (read-only exploration) or **implement** mode (sandbox, can write files and auto-commits)?"
+
+Default to `implement` if the user has no preference.
+
 Wait for user confirmation before proceeding.
 
 ### 4. Update .gitignore
@@ -92,7 +97,8 @@ Or write the file directly. The format is:
   "project_name": "<detected-project-name>",
   "state_files": [".env", ".env.local"],
   "build_command": "pnpm install",
-  "worktree_dir": ".worktrees"
+  "worktree_dir": ".worktrees",
+  "default_mode": "implement"
 }
 ```
 
@@ -101,6 +107,7 @@ Where:
 - `state_files` — List of files to copy into each worktree (e.g., `.env`)
 - `build_command` — Command to run after creating a worktree (e.g., `pnpm install`)
 - `worktree_dir` — Directory for worktrees (default: `.worktrees`)
+- `default_mode` — Default agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit)
 
 ### 6. Report the result
 
@@ -112,7 +119,7 @@ Provide:
    - Create spinoff: `/spinoff:new my-feature`
    - With base branch: `/spinoff:new my-feature --base develop`
    - With task description: `/spinoff:new my-feature --task "Implement feature X"`
-   - With permission mode: `/spinoff:new my-feature --permission-mode bypassPermissions`
+   - Plan mode: `/spinoff:new my-feature --mode plan`
 4. **Slash commands**: Explain the available slash commands (see below)
 
 ---
@@ -129,7 +136,7 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
 /spinoff:new fix-auth-bug
 /spinoff:new feat-dark-mode --base develop
 /spinoff:new JIRA-1234 --task "Implement user profile page"
-/spinoff:new fix-bug --permission-mode bypassPermissions
+/spinoff:new explore-auth --task "analyze the auth architecture" --mode plan
 ```
 
 **Options:**
@@ -138,13 +145,15 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
 |--------|---------|-------------|
 | `--base` | current branch | Base branch for the worktree |
 | `--task` | none | Task description to pass to Claude |
-| `--permission-mode` | `plan` | Permission mode: `acceptEdits`, `bypassPermissions`, `default`, `dontAsk`, `plan` |
+| `--mode` | project `default_mode` | `plan` (read-only) or `implement` (sandbox + auto-commit) |
 
 **What it does:**
 1. Creates git worktree at `.worktrees/<task-name>`
 2. Creates branch `worktree/<task-name>`
 3. Copies state files and runs build command
-4. Opens WezTerm tab with Claude agent in plan mode (requires approval before making changes)
+4. Opens WezTerm tab with Claude agent in the selected mode:
+   - **plan**: Read-only exploration (`--permission-mode plan`, no sandbox)
+   - **implement**: Sandboxed execution with auto-commit instructions
 
 ### `/spinoff:merge <spinoff-name>`
 

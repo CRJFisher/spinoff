@@ -48,10 +48,10 @@ Examples:
         help="Task description to pass to Claude agent",
     )
     parser.add_argument(
-        "--permission-mode",
-        default="plan",
-        choices=["acceptEdits", "bypassPermissions", "default", "dontAsk", "plan"],
-        help="Permission mode for Claude session (default: plan)",
+        "--mode",
+        default=None,
+        choices=["plan", "implement"],
+        help="Agent mode: plan (read-only) or implement (sandbox + auto-commit). Falls back to config default_mode.",
     )
     args = parser.parse_args()
 
@@ -122,8 +122,11 @@ Examples:
             shutil.copy2(src, dest)
             print(f"  Copied: {f}")
 
+    # Resolve mode: explicit flag > config default
+    mode = args.mode or config.default_mode
+
     # Build claude command (pass task as positional arg if provided)
-    claude_cmd = get_claude_command(task=args.task, permission_mode=args.permission_mode)
+    claude_cmd = get_claude_command(task=args.task, mode=mode)
     tab_title = f"wt: {safe_name}"
 
     # Chain build command and claude command in the WezTerm tab
@@ -160,7 +163,12 @@ Examples:
     # Print summary
     print(f"\nWorktree ready at: {worktree_path}")
     print(f"Branch: {branch_name}")
-    print(f"Sandbox: enabled (Claude Code built-in)")
+    print(f"Mode: {mode}")
+    if mode == "implement":
+        print(f"Sandbox: enabled (Claude Code built-in)")
+        print(f"Auto-commit: agent will commit before finishing")
+    else:
+        print(f"Plan mode: read-only exploration (no sandbox)")
     if pane_id:
         print(f"WezTerm tab: {tab_title} (pane {pane_id})")
     if args.task:

@@ -26,7 +26,17 @@ def claude_available() -> bool:
     return shutil.which("claude") is not None
 
 
-def get_claude_command(task: Optional[str] = None, sandbox: bool = True, permission_mode: str = "plan") -> list[str]:
+COMMIT_INSTRUCTIONS = (
+    "\n\n---\n"
+    "When you have completed all work, commit your changes before finishing:\n"
+    "1. Stage all modified and new files with `git add` (use specific file paths, not `git add .`)\n"
+    "2. Create a commit with a descriptive message summarizing what was done\n"
+    "3. Verify with `git status` that the working tree is clean\n"
+    "Do NOT push to a remote. The parent agent will handle merging via /spinoff:merge."
+)
+
+
+def get_claude_command(task: Optional[str] = None, mode: str = "implement") -> list[str]:
     """
     Get claude command for interactive session.
 
@@ -35,15 +45,16 @@ def get_claude_command(task: Optional[str] = None, sandbox: bool = True, permiss
 
     Args:
         task: Optional task description to pass to Claude
-        sandbox: Enable sandbox mode (default: True)
-        permission_mode: Permission mode for Claude session (default: plan)
+        mode: Agent mode - "plan" (read-only) or "implement" (sandbox, can write)
 
     Returns:
         Claude command as list of arguments
     """
     cmd = ["claude"]
 
-    if sandbox:
+    if mode == "plan":
+        cmd.extend(["--permission-mode", "plan"])
+    else:  # implement
         settings = {
             "sandbox": {
                 "enabled": True,
@@ -52,10 +63,10 @@ def get_claude_command(task: Optional[str] = None, sandbox: bool = True, permiss
         }
         cmd.extend(["--settings", json.dumps(settings)])
         cmd.append("--dangerously-skip-permissions")
-    elif permission_mode:
-        cmd.extend(["--permission-mode", permission_mode])
 
     if task:
+        if mode == "implement":
+            task = task + COMMIT_INSTRUCTIONS
         cmd.append(task)
 
     return cmd
@@ -65,5 +76,5 @@ if __name__ == "__main__":
     print("Claude Code Sandbox Configuration for Worktrees")
     print("=" * 50)
     print(f"Claude CLI available: {claude_available()}")
-    print(f"\nClaude command (sandbox): {' '.join(get_claude_command())}")
-    print(f"Claude command (no sandbox): {' '.join(get_claude_command(sandbox=False))}")
+    print(f"\nImplement mode: {' '.join(get_claude_command(mode='implement'))}")
+    print(f"Plan mode:      {' '.join(get_claude_command(mode='plan'))}")

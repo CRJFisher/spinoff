@@ -1,7 +1,7 @@
 ---
 name: new
 description: Spin off a new autonomous Claude agent in an isolated git worktree with WezTerm tab and sandbox.
-argument-hint: <task-name> [--base <branch>] [--task <description>] [--permission-mode <mode>]
+argument-hint: <task-name> [--base <branch>] [--task <description>] [--mode <plan|implement>]
 allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
 ---
 
@@ -23,11 +23,12 @@ Each spinoff runs in Claude Code's native sandbox with a dedicated WezTerm tab. 
 - `/spinoff:new fix-auth-bug` - Create spinoff from current branch
 - `/spinoff:new feat-dark-mode --base develop` - Create from develop branch
 - `/spinoff:new JIRA-1234 --task "Implement user profile page"` - With task for agent
+- `/spinoff:new explore-auth --task "analyze the auth architecture" --mode plan` - Read-only exploration
 
 **Options:**
 - `--base <branch>` - Base branch to create worktree from (default: current branch)
 - `--task <description>` - Task description passed to Claude agent
-- `--permission-mode <mode>` - Permission mode for Claude session (default: plan)
+- `--mode <plan|implement>` - Agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit). Falls back to project `default_mode`.
 
 ---
 
@@ -65,13 +66,28 @@ Parse `$ARGUMENTS` for:
 - **Task name** (required, first positional argument)
 - **--base <branch>** (optional)
 - **--task <description>** (optional)
-- **--permission-mode <mode>** (optional, default: plan)
+- **--mode <plan|implement>** (optional)
 
 If no task name provided, ask the user for a descriptive task name. Good examples:
 - `fix-auth-timeout`
 - `feat-dark-mode`
 - `JIRA-1234-user-profile`
 - `refactor-api-client`
+
+### 3a. Determine Agent Mode
+
+Decide the agent mode (`plan` or `implement`) using these rules in order:
+
+1. **Explicit `--mode` flag** → use it, done.
+2. **Task description heuristics** — if `--task` was provided, scan for keyword signals:
+   - **Plan signals**: plan, design, explore, investigate, analyze, compare, evaluate, research, review, assess, propose, understand, audit
+   - **Implement signals**: implement, fix, build, create, add, update, refactor, migrate, remove, delete, replace, write, change, move, rename, upgrade, convert, integrate
+   - If a strong signal is found → suggest that mode, confirm with user.
+3. **Project default** — read `default_mode` from `.claude/spinoff.json` and confirm with user.
+
+Tell the user the chosen mode and what it means:
+- **plan**: Read-only exploration. Agent uses `--permission-mode plan` (no sandbox). Good for investigation, design, and code review.
+- **implement**: Sandboxed execution. Agent can write files and run commands. Auto-commits work before finishing. Good for bug fixes, features, and refactoring.
 
 ### 4. Find Related Task/Spec Files
 
@@ -141,7 +157,7 @@ Non-zero exit means the file doesn't exist on the base branch (untracked, uncomm
 Run the spinoff creation script with parsed arguments:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--permission-mode <mode>]
+python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--mode <plan|implement>]
 ```
 
 ### 6. Report Result
@@ -149,7 +165,9 @@ python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <b
 Provide the user with:
 - Worktree location path
 - Branch name created
+- Mode (`plan` or `implement`)
 - WezTerm tab info
+- For implement mode: mention that the agent will auto-commit its work before finishing
 - Reminder about `/spinoff:merge` when done
 
 ---
@@ -187,10 +205,8 @@ Provide a clear summary:
 Spinoff Created
   Location: /path/to/repo/.worktrees/<task-name>
   Branch: worktree/<task-name>
+  Mode: implement (sandbox + auto-commit)
   WezTerm tab: wt: <task-name>
-
-To start working:
-  cd /path/to/repo/.worktrees/<task-name>
 
 When done, merge with:
   /spinoff:merge <task-name>
