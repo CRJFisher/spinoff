@@ -3,3 +3,4 @@ __pycache__/
 .worktrees/
 tmp/
 .claude/settings.local.json
+.coverage

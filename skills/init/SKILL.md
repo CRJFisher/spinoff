@@ -42,36 +42,38 @@ If this fails, inform the user and exit.
 
 Identify the technology stack by checking for:
 
-| File | Stack |
-|------|-------|
-| `package.json` | Node.js |
-| `pyproject.toml` / `requirements.txt` | Python |
-| `Cargo.toml` | Rust |
-| `go.mod` | Go |
-| `pom.xml` / `build.gradle` | Java |
-| `Gemfile` | Ruby |
+| File                                  | Stack   |
+| ------------------------------------- | ------- |
+| `package.json`                        | Node.js |
+| `pyproject.toml` / `requirements.txt` | Python  |
+| `Cargo.toml`                          | Rust    |
+| `go.mod`                              | Go      |
+| `pom.xml` / `build.gradle`            | Java    |
+| `Gemfile`                             | Ruby    |
 
 Find state files that should be copied: `.env`, `.env.local`, `.env.development`, local config files.
 
 Determine the build command:
 
-| Stack | Build Command |
-|-------|---------------|
-| Node.js (npm) | `npm install && npm run build` |
+| Stack          | Build Command                    |
+| -------------- | -------------------------------- |
+| Node.js (npm)  | `npm install && npm run build`   |
 | Node.js (pnpm) | `pnpm install && pnpm run build` |
-| Node.js (yarn) | `yarn install && yarn build` |
-| Python | `pip install -e .` |
-| Rust | `cargo build` |
-| Go | `go build ./...` |
+| Node.js (yarn) | `yarn install && yarn build`     |
+| Python         | `pip install -e .`               |
+| Rust           | `cargo build`                    |
+| Go             | `go build ./...`                 |
 
 ### 3. Present findings and request confirmation
 
 Show the user:
+
 - Detected stack
 - State files to copy
 - Build command
 
 Ask the user their preferred default mode for spinoff agents:
+
 > "When spinning off tasks, should the default be **plan** mode (read-only exploration) or **implement** mode (sandbox, can write files and auto-commits)?"
 
 Default to `implement` if the user has no preference.
@@ -80,7 +82,7 @@ Wait for user confirmation before proceeding.
 
 ### 4. Update .gitignore
 
-Add `.worktrees/` to `.gitignore` if not already present. Commit with message: `chore: configure gitignore for worktree support`
+Add `.worktrees/` to `.gitignore` if not already present. Commit with message: `chore: configure gitignore for worktree support`. No need to mention spinoff in the `.gitignore` or commit message.
 
 ### 5. Write spinoff configuration
 
@@ -103,6 +105,7 @@ Or write the file directly. The format is:
 ```
 
 Where:
+
 - `project_name` — Name of the project (typically the repo directory name)
 - `state_files` — List of files to copy into each worktree (e.g., `.env`)
 - `build_command` — Command to run after creating a worktree (e.g., `pnpm install`)
@@ -141,13 +144,14 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
 
 **Options:**
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--base` | current branch | Base branch for the worktree |
-| `--task` | none | Task description to pass to Claude |
+| Option   | Default                | Description                                               |
+| -------- | ---------------------- | --------------------------------------------------------- |
+| `--base` | current branch         | Base branch for the worktree                              |
+| `--task` | none                   | Task description to pass to Claude                        |
 | `--mode` | project `default_mode` | `plan` (read-only) or `implement` (sandbox + auto-commit) |
 
 **What it does:**
+
 1. Creates git worktree at `.worktrees/<task-name>`
 2. Creates branch `worktree/<task-name>`
 3. Copies state files and runs build command
@@ -166,6 +170,7 @@ Merges spinoff back to target branch and cleans up.
 ```
 
 **What it does:**
+
 1. Closes WezTerm tab if one exists
 2. Merges changes (merge/squash/rebase)
 3. Removes worktree directory

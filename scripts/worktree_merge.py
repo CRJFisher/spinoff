@@ -284,6 +284,11 @@ def merge_worktree(
         if result.returncode != 0:
             warnings.append(f"Could not remove worktree directory: {result.stderr.strip()}")
 
+    # Remove startup script (sibling to worktree directory)
+    startup_script = worktree_path.parent / f"{worktree_name}.start.sh"
+    if startup_script.exists():
+        startup_script.unlink()
+
     # Step 7: Delete branch
     # Use -D (force) for squash/rebase since original commits aren't in target history
     if delete_branch:

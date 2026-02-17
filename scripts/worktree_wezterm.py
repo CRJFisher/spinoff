@@ -105,8 +105,17 @@ def start_wezterm_with_command(
             try:
                 panes = json.loads(list_result.stdout)
                 if panes:
-                    # Return the first pane (the one we just created)
                     pane_id = str(panes[0].get("pane_id"))
+
+                    # Verify pane survived startup
+                    if not verify_pane_alive(pane_id):
+                        return False, None, "Tab died shortly after creation — check the startup script for errors"
+
+                    # Activate the pane (bring workspace to foreground)
+                    ok, msg = activate_pane(pane_id)
+                    if not ok:
+                        print(f"  {msg}", file=sys.stderr)
+
                     return True, pane_id, f"Started WezTerm (pane {pane_id})"
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -211,7 +220,59 @@ def create_tab(
     if pane_id:
         set_tab_title(pane_id, title)
 
+        # Verify pane survived startup
+        if not verify_pane_alive(pane_id):
+            return False, None, "Tab died shortly after creation — check the startup script for errors"
+
+        # Activate the pane (bring workspace to foreground)
+        ok, msg = activate_pane(pane_id)
+        if not ok:
+            print(f"  {msg}", file=sys.stderr)
+
     return True, pane_id, f"Created tab '{title}' (pane {pane_id})"
+
+
+def verify_pane_alive(pane_id: str, delay: float = 1.5) -> bool:
+    """
+    Wait briefly then check if a pane is still alive.
+
+    Used after spawning a tab to detect early crashes (e.g. the command
+    inside failed immediately). With the startup-script approach the pane
+    should always survive (exec bash keeps it open), but this is
+    defense-in-depth.
+
+    Args:
+        pane_id: WezTerm pane ID to check
+        delay: Seconds to wait before checking (default 1.5)
+
+    Returns:
+        True if the pane is still alive after the delay
+    """
+    time.sleep(delay)
+    return pane_exists(pane_id)
+
+
+def activate_pane(pane_id: str) -> tuple[bool, str]:
+    """
+    Activate (focus) a WezTerm pane, bringing its workspace to the foreground.
+
+    This ensures that cross-project tabs don't silently open in an invisible
+    background workspace.
+
+    Args:
+        pane_id: WezTerm pane ID to activate
+
+    Returns:
+        (success, message)
+    """
+    result = subprocess.run(
+        ["wezterm", "cli", "activate-pane", "--pane-id", str(pane_id)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False, f"Warning: Could not activate pane {pane_id}: {result.stderr.strip()}"
+    return True, f"Activated pane {pane_id}"
 
 
 def close_tab(pane_id: str) -> tuple[bool, str]:

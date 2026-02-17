@@ -1,0 +1,11 @@
+[project]
+name = "spinoff"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests requiring WezTerm and Claude CLI",
+]
+pythonpath = ["scripts"]

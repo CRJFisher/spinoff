@@ -17,6 +17,7 @@ Flow:
 import argparse
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,79 @@ from spinoff_config import load_config
 from worktree_state import add_worktree
 from worktree_sandbox import claude_available, get_claude_command
 from worktree_wezterm import ensure_wezterm_running, create_tab
+
+
+def sanitize_task_name(raw: str) -> str:
+    """Sanitize and validate a task name. Raises ValueError if invalid."""
+    safe = raw.replace("/", "-").replace(" ", "-").lower().strip("-")
+    if not safe or safe in (".", ".."):
+        raise ValueError(f"Invalid task name: '{raw}'")
+    if safe.startswith("-") or safe.startswith("."):
+        raise ValueError(f"Task name cannot start with '-' or '.': '{safe}'")
+    if ".." in safe:
+        raise ValueError(f"Task name cannot contain '..': '{safe}'")
+    if not all(c.isalnum() or c in "-_" for c in safe):
+        raise ValueError(f"Task name contains invalid characters: '{safe}'")
+    return safe
+
+
+def write_startup_script(
+    script_path: Path,
+    worktree_path: Path,
+    build_command: str,
+    claude_cmd: list[str],
+) -> Path:
+    """
+    Write a startup script that runs the build and then Claude.
+
+    The script is placed as a sibling to the worktree directory inside
+    .worktrees/, which is already gitignored. Each command is on its own
+    line — no nested quoting needed.
+
+    On any failure (build or Claude exit), `exec bash` keeps the tab alive
+    so the user can inspect errors or interact.
+
+    Args:
+        script_path: Where to write the script
+        worktree_path: Absolute path to the worktree directory
+        build_command: Shell command to run before Claude (may be empty)
+        claude_cmd: Claude command as list of arguments
+
+    Returns:
+        Path to the written script
+    """
+    lines = ["#!/bin/bash"]
+    lines.append(f"cd {shlex.quote(str(worktree_path))}")
+    lines.append("")
+
+    # Clear parent Claude Code session markers so the child doesn't
+    # refuse to start ("cannot be launched inside another session")
+    lines.append("unset CLAUDECODE")
+    lines.append("unset CLAUDE_CODE_ENTRYPOINT")
+    lines.append("")
+
+    if build_command:
+        lines.append("# Run build")
+        lines.append(build_command)
+        lines.append('if [ $? -ne 0 ]; then')
+        lines.append('    echo "Build failed. Shell kept open for debugging."')
+        lines.append('    exec bash')
+        lines.append("fi")
+        lines.append("")
+
+    lines.append("# Run Claude")
+    claude_cmd_str = " ".join(shlex.quote(c) for c in claude_cmd)
+    lines.append(claude_cmd_str)
+    lines.append("")
+
+    lines.append("# Keep shell alive after Claude exits")
+    lines.append('echo "Claude exited. Shell kept open."')
+    lines.append("exec bash")
+
+    script_path.write_text("\n".join(lines) + "\n")
+    script_path.chmod(script_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    return script_path
 
 
 def main():
@@ -53,6 +127,11 @@ Examples:
         choices=["plan", "implement"],
         help="Agent mode: plan (read-only) or implement (sandbox + auto-commit). Falls back to config default_mode.",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Claude model (e.g. haiku, sonnet, opus)",
+    )
     args = parser.parse_args()
 
     # Validate prerequisites
@@ -75,21 +154,10 @@ Examples:
     config = load_config(repo_root)
 
     # Sanitize and validate task name
-    safe_name = args.task_name.replace("/", "-").replace(" ", "-").lower()
-    safe_name = safe_name.strip("-")
-
-    if not safe_name or safe_name in (".", ".."):
-        print(f"Error: Invalid task name: '{args.task_name}'", file=sys.stderr)
-        sys.exit(1)
-    if safe_name.startswith("-") or safe_name.startswith("."):
-        print(f"Error: Task name cannot start with '-' or '.': '{safe_name}'", file=sys.stderr)
-        sys.exit(1)
-    if ".." in safe_name:
-        print(f"Error: Task name cannot contain '..': '{safe_name}'", file=sys.stderr)
-        sys.exit(1)
-    if not all(c.isalnum() or c in "-_" for c in safe_name):
-        print(f"Error: Task name contains invalid characters: '{safe_name}'", file=sys.stderr)
-        print("  Use only letters, numbers, hyphens, and underscores.", file=sys.stderr)
+    try:
+        safe_name = sanitize_task_name(args.task_name)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
     worktree_path = repo_root / config.worktree_dir / safe_name
@@ -126,17 +194,20 @@ Examples:
     mode = args.mode or config.default_mode
 
     # Build claude command (pass task as positional arg if provided)
-    claude_cmd = get_claude_command(task=args.task, mode=mode)
+    claude_cmd = get_claude_command(task=args.task, mode=mode, model=args.model)
     tab_title = f"wt: {safe_name}"
 
-    # Chain build command and claude command in the WezTerm tab
-    # Build runs in the tab so the user isn't blocked, and errors are visible there
+    # Generate startup script as sibling to the worktree directory
+    script_path = repo_root / config.worktree_dir / f"{safe_name}.start.sh"
+    write_startup_script(
+        script_path=script_path,
+        worktree_path=worktree_path,
+        build_command=config.build_command,
+        claude_cmd=claude_cmd,
+    )
     if config.build_command:
         print(f"  Build will run in WezTerm tab: {config.build_command}")
-        claude_cmd_str = " ".join(shlex.quote(c) for c in claude_cmd)
-        tab_cmd = ["bash", "-c", f"{config.build_command} && {claude_cmd_str}"]
-    else:
-        tab_cmd = claude_cmd
+    tab_cmd = [str(script_path)]
 
     # Create WezTerm tab in project-specific workspace
     print("  Opening WezTerm tab...")

@@ -1,7 +1,7 @@
 ---
 name: new
 description: Spin off a new autonomous Claude agent in an isolated git worktree with WezTerm tab and sandbox.
-argument-hint: <task-name> [--base <branch>] [--task <description>] [--mode <plan|implement>]
+argument-hint: <task-name> [--base <branch>] [--task <description>] [--mode <plan|implement>] [--model <model>]
 allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
 ---
 
@@ -29,6 +29,7 @@ Each spinoff runs in Claude Code's native sandbox with a dedicated WezTerm tab. 
 - `--base <branch>` - Base branch to create worktree from (default: current branch)
 - `--task <description>` - Task description passed to Claude agent
 - `--mode <plan|implement>` - Agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit). Falls back to project `default_mode`.
+- `--model <model>` - Claude model to use (e.g. `haiku`, `sonnet`, `opus`). If omitted, uses user's default.
 
 ---
 
@@ -67,6 +68,7 @@ Parse `$ARGUMENTS` for:
 - **--base <branch>** (optional)
 - **--task <description>** (optional)
 - **--mode <plan|implement>** (optional)
+- **--model <model>** (optional)
 
 If no task name provided, ask the user for a descriptive task name. Good examples:
 - `fix-auth-timeout`
@@ -157,7 +159,7 @@ Non-zero exit means the file doesn't exist on the base branch (untracked, uncomm
 Run the spinoff creation script with parsed arguments:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--mode <plan|implement>]
+python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--mode <plan|implement>] [--model <model>]
 ```
 
 ### 6. Report Result

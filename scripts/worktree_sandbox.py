@@ -36,7 +36,7 @@ COMMIT_INSTRUCTIONS = (
 )
 
 
-def get_claude_command(task: Optional[str] = None, mode: str = "implement") -> list[str]:
+def get_claude_command(task: Optional[str] = None, mode: str = "implement", model: Optional[str] = None) -> list[str]:
     """
     Get claude command for interactive session.
 
@@ -46,6 +46,7 @@ def get_claude_command(task: Optional[str] = None, mode: str = "implement") -> l
     Args:
         task: Optional task description to pass to Claude
         mode: Agent mode - "plan" (read-only) or "implement" (sandbox, can write)
+        model: Optional Claude model (e.g. "haiku", "sonnet", "opus")
 
     Returns:
         Claude command as list of arguments
@@ -54,6 +55,8 @@ def get_claude_command(task: Optional[str] = None, mode: str = "implement") -> l
 
     if mode == "plan":
         cmd.extend(["--permission-mode", "plan"])
+        if model:
+            cmd.extend(["--settings", json.dumps({"model": model})])
     else:  # implement
         settings = {
             "sandbox": {
@@ -61,6 +64,8 @@ def get_claude_command(task: Optional[str] = None, mode: str = "implement") -> l
                 "autoAllowBashIfSandboxed": True
             }
         }
+        if model:
+            settings["model"] = model
         cmd.extend(["--settings", json.dumps(settings)])
         cmd.append("--dangerously-skip-permissions")
 
