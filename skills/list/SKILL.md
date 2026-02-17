@@ -1,6 +1,8 @@
 ---
 name: list
 description: List all active spinoff worktrees with their status, branch, and WezTerm pane liveness.
+context: fork
+disable-model-invocation: true
 allowed-tools: Bash(python *), Bash(PYTHONPATH=*)
 ---
 

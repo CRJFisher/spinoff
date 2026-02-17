@@ -1,6 +1,7 @@
 ---
 name: init
 description: Initialize a project for spinoff support. Analyzes tech stack and creates spinoff config.
+disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep, Write, Edit
 ---
 

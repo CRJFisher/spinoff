@@ -2,6 +2,7 @@
 name: merge
 description: Merge a spinoff's changes back to target branch with cleanup of WezTerm tabs and git branches.
 argument-hint: [spinoff-name] [--target <branch>] [--strategy <merge|squash|rebase>] [--keep-branch]
+disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 ---
 
