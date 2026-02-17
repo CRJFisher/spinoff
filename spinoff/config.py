@@ -105,9 +105,9 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  spinoff_config.py show
-  spinoff_config.py save --project-name my-app --build-command "pnpm install"
-  spinoff_config.py save --project-name my-app --state-files .env .env.local
+  python -m spinoff.config show
+  python -m spinoff.config save --project-name my-app --build-command "pnpm install"
+  python -m spinoff.config save --project-name my-app --state-files .env .env.local
 """,
     )
     parser.add_argument(

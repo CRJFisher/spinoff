@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from worktree_state import load_state
-from worktree_wezterm import list_panes
+from spinoff.state import load_state
+from spinoff.wezterm import list_panes
 
 from .conftest import run_create_worktree
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.e2e
 
 
 class TestMultiProject:
-    def test_separate_workspaces(self, test_project_pair, spinoff_scripts):
+    def test_separate_workspaces(self, test_project_pair, plugin_root):
         """Create spinoff in two projects, verify separate WezTerm windows."""
         project_a, project_b = test_project_pair
 
@@ -25,9 +25,9 @@ class TestMultiProject:
         pane_ids_before = {str(p.get("pane_id")) for p in panes_before}
 
         # Create worktree in each project
-        r1 = run_create_worktree(project_a, "task-a", spinoff_scripts)
+        r1 = run_create_worktree(project_a, "task-a", plugin_root)
         assert r1.returncode == 0, r1.stderr
-        r2 = run_create_worktree(project_b, "task-b", spinoff_scripts)
+        r2 = run_create_worktree(project_b, "task-b", plugin_root)
         assert r2.returncode == 0, r2.stderr
 
         # Get new panes
@@ -60,12 +60,12 @@ class TestMultiProject:
         assert entry_b is not None and entry_b.pane_id is not None
         assert entry_a.pane_id != entry_b.pane_id
 
-    def test_independent_state(self, test_project_pair, spinoff_scripts):
+    def test_independent_state(self, test_project_pair, plugin_root):
         """Each project's state file has no cross-contamination."""
         project_a, project_b = test_project_pair
 
-        run_create_worktree(project_a, "task-aa", spinoff_scripts)
-        run_create_worktree(project_b, "task-bb", spinoff_scripts)
+        run_create_worktree(project_a, "task-aa", plugin_root)
+        run_create_worktree(project_b, "task-bb", plugin_root)
 
         state_a = load_state(project_a)
         state_b = load_state(project_b)

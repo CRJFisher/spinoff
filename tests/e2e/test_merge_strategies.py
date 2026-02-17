@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from worktree_state import load_state
+from spinoff.state import load_state
 
 from .conftest import run_create_worktree, run_merge_worktree
 
@@ -22,13 +22,13 @@ def _make_commit_in_worktree(project, name):
 
 
 class TestMergeStrategies:
-    def test_default_merge(self, test_project, spinoff_scripts):
+    def test_default_merge(self, test_project, plugin_root):
         """Default merge creates a merge commit with --no-ff."""
         project = test_project
-        run_create_worktree(project, "merge-default", spinoff_scripts)
+        run_create_worktree(project, "merge-default", plugin_root)
         _make_commit_in_worktree(project, "merge-default")
 
-        result = run_merge_worktree(project, "merge-default", spinoff_scripts)
+        result = run_merge_worktree(project, "merge-default", plugin_root)
         assert result.returncode == 0, result.stdout + result.stderr
 
         # Check for merge commit
@@ -38,14 +38,14 @@ class TestMergeStrategies:
         ).stdout
         assert "Merge worktree: merge-default" in log
 
-    def test_squash_merge(self, test_project, spinoff_scripts):
+    def test_squash_merge(self, test_project, plugin_root):
         """Squash merge creates a single commit."""
         project = test_project
-        run_create_worktree(project, "merge-squash", spinoff_scripts)
+        run_create_worktree(project, "merge-squash", plugin_root)
         _make_commit_in_worktree(project, "merge-squash")
 
         result = run_merge_worktree(
-            project, "merge-squash", spinoff_scripts, strategy="squash",
+            project, "merge-squash", plugin_root, strategy="squash",
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
@@ -55,14 +55,14 @@ class TestMergeStrategies:
         ).stdout
         assert "Complete: merge-squash" in log
 
-    def test_rebase_merge(self, test_project, spinoff_scripts):
+    def test_rebase_merge(self, test_project, plugin_root):
         """Rebase produces linear history."""
         project = test_project
-        run_create_worktree(project, "merge-rebase", spinoff_scripts)
+        run_create_worktree(project, "merge-rebase", plugin_root)
         _make_commit_in_worktree(project, "merge-rebase")
 
         result = run_merge_worktree(
-            project, "merge-rebase", spinoff_scripts, strategy="rebase",
+            project, "merge-rebase", plugin_root, strategy="rebase",
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
@@ -73,14 +73,14 @@ class TestMergeStrategies:
         ).stdout
         assert "Merge" not in log
 
-    def test_keep_branch(self, test_project, spinoff_scripts):
+    def test_keep_branch(self, test_project, plugin_root):
         """--keep-branch preserves branch after merge."""
         project = test_project
-        run_create_worktree(project, "merge-keep", spinoff_scripts)
+        run_create_worktree(project, "merge-keep", plugin_root)
         _make_commit_in_worktree(project, "merge-keep")
 
         result = run_merge_worktree(
-            project, "merge-keep", spinoff_scripts, keep_branch=True,
+            project, "merge-keep", plugin_root, keep_branch=True,
         )
         assert result.returncode == 0, result.stdout + result.stderr
 

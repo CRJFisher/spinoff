@@ -1,10 +1,10 @@
-"""Tests for worktree_merge.py."""
+"""Tests for spinoff.merge."""
 
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from worktree_merge import MergeResult, merge_worktree
+from spinoff.merge import MergeResult, merge_worktree
 
 
 class TestMergeResultStr:
@@ -28,7 +28,7 @@ class TestMergeResultStr:
 
 
 class TestMergeWorktree:
-    @patch("worktree_merge.load_config")
+    @patch("spinoff.merge.load_config")
     def test_missing_worktree_dir(self, mock_load_config, tmp_path):
         mock_config = MagicMock()
         mock_config.worktree_dir = ".worktrees"
@@ -38,7 +38,7 @@ class TestMergeWorktree:
         assert result.success is False
         assert "not found" in result.message
 
-    @patch("worktree_merge.load_config")
+    @patch("spinoff.merge.load_config")
     def test_unknown_strategy(self, mock_load_config, tmp_path):
         mock_config = MagicMock()
         mock_config.worktree_dir = ".worktrees"
@@ -49,9 +49,9 @@ class TestMergeWorktree:
         wt_dir.mkdir(parents=True)
 
         # Mock load_state and has_uncommitted_changes and target branch check
-        with patch("worktree_merge.load_state") as mock_state, \
-             patch("worktree_merge.has_uncommitted_changes", return_value=(False, "")), \
-             patch("worktree_merge.subprocess") as mock_subprocess:
+        with patch("spinoff.merge.load_state") as mock_state, \
+             patch("spinoff.merge.has_uncommitted_changes", return_value=(False, "")), \
+             patch("spinoff.merge.subprocess") as mock_subprocess:
             mock_state.return_value = MagicMock(find=MagicMock(return_value=None))
             # Target branch validation passes
             mock_result = MagicMock()

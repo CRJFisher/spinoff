@@ -22,13 +22,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Ensure sibling modules are importable (plugin directory)
-sys.path.insert(0, str(Path(__file__).parent))
-
-from spinoff_config import load_config
-from worktree_state import add_worktree
-from worktree_sandbox import claude_available, get_claude_command
-from worktree_wezterm import ensure_wezterm_running, create_tab
+from spinoff.config import load_config
+from spinoff.state import add_worktree
+from spinoff.sandbox import claude_available, get_claude_command
+from spinoff.wezterm import ensure_wezterm_running, create_tab
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -110,9 +107,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python create_worktree.py fix-auth-bug
-  python create_worktree.py feat-dark-mode --base develop
-  python create_worktree.py JIRA-1234 --task "Implement user profile page"
+  python -m spinoff.create fix-auth-bug
+  python -m spinoff.create feat-dark-mode --base develop
+  python -m spinoff.create JIRA-1234 --task "Implement user profile page"
 """,
     )
     parser.add_argument("task_name", help="Name for the task/branch")

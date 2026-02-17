@@ -8,4 +8,4 @@ testpaths = ["tests"]
 markers = [
     "e2e: end-to-end tests requiring WezTerm and Claude CLI",
 ]
-pythonpath = ["scripts"]
+pythonpath = ["."]

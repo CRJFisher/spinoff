@@ -1,11 +1,11 @@
-"""Tests for worktree_sandbox.py."""
+"""Tests for spinoff.sandbox."""
 
 import json
 from unittest.mock import patch
 
 import pytest
 
-from worktree_sandbox import get_claude_command, claude_available, COMMIT_INSTRUCTIONS
+from spinoff.sandbox import get_claude_command, claude_available, COMMIT_INSTRUCTIONS
 
 
 class TestGetClaudeCommand:
@@ -82,10 +82,10 @@ class TestModelSelection:
 
 
 class TestClaudeAvailable:
-    @patch("worktree_sandbox.shutil.which", return_value="/usr/local/bin/claude")
+    @patch("spinoff.sandbox.shutil.which", return_value="/usr/local/bin/claude")
     def test_available(self, mock_which):
         assert claude_available() is True
 
-    @patch("worktree_sandbox.shutil.which", return_value=None)
+    @patch("spinoff.sandbox.shutil.which", return_value=None)
     def test_not_available(self, mock_which):
         assert claude_available() is False

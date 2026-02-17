@@ -409,10 +409,10 @@ if __name__ == "__main__":
 
         else:
             print("Usage:")
-            print("  worktree_wezterm.py create <title> [cwd] [workspace] [command...]")
-            print("  worktree_wezterm.py close <pane_id>")
-            print("  worktree_wezterm.py title <pane_id> <title>")
-            print("  worktree_wezterm.py list")
+            print("  python -m spinoff.wezterm create <title> [cwd] [workspace] [command...]")
+            print("  python -m spinoff.wezterm close <pane_id>")
+            print("  python -m spinoff.wezterm title <pane_id> <title>")
+            print("  python -m spinoff.wezterm list")
     else:
         print("\nRun with a command to test WezTerm integration")
         print("\nCurrent panes:")

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from worktree_wezterm import wezterm_available, list_panes, close_tab
+from spinoff.wezterm import wezterm_available, list_panes, close_tab
 
 
 def pytest_collection_modifyitems(config, items):
@@ -20,9 +20,9 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture
-def spinoff_scripts():
-    """Path to the scripts/ directory."""
-    return Path(__file__).resolve().parent.parent.parent / "scripts"
+def plugin_root():
+    """Path to the plugin root (repo root)."""
+    return Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.fixture
@@ -108,23 +108,31 @@ def cleanup_wezterm_panes():
         close_tab(pane_id)
 
 
-def run_create_worktree(project, task_name, spinoff_scripts, **kwargs):
-    """Helper to run create_worktree.py for e2e tests."""
-    cmd = ["python", str(spinoff_scripts / "create_worktree.py"), task_name]
+def run_create_worktree(project, task_name, plugin_root, **kwargs):
+    """Helper to run spinoff.create for e2e tests."""
+    cmd = [
+        "python", "-m", "spinoff.create", task_name,
+    ]
 
     for key, val in kwargs.items():
         if val is not None:
             cmd.extend([f"--{key}", str(val)])
 
+    env_extra = {"PYTHONPATH": str(plugin_root)}
+    import os
+    env = {**os.environ, **env_extra}
+
     result = subprocess.run(
-        cmd, cwd=project, capture_output=True, text=True,
+        cmd, cwd=project, capture_output=True, text=True, env=env,
     )
     return result
 
 
-def run_merge_worktree(project, task_name, spinoff_scripts, **kwargs):
-    """Helper to run worktree_merge.py for e2e tests."""
-    cmd = ["python", str(spinoff_scripts / "worktree_merge.py"), task_name]
+def run_merge_worktree(project, task_name, plugin_root, **kwargs):
+    """Helper to run spinoff.merge for e2e tests."""
+    cmd = [
+        "python", "-m", "spinoff.merge", task_name,
+    ]
 
     for key, val in kwargs.items():
         if val is not None:
@@ -137,7 +145,11 @@ def run_merge_worktree(project, task_name, spinoff_scripts, **kwargs):
 
     cmd.extend(["--project", str(project)])
 
+    env_extra = {"PYTHONPATH": str(plugin_root)}
+    import os
+    env = {**os.environ, **env_extra}
+
     result = subprocess.run(
-        cmd, cwd=project, capture_output=True, text=True,
+        cmd, cwd=project, capture_output=True, text=True, env=env,
     )
     return result

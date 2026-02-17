@@ -2,7 +2,7 @@
 name: merge
 description: Merge a spinoff's changes back to target branch with cleanup of WezTerm tabs and git branches.
 argument-hint: [spinoff-name] [--target <branch>] [--strategy <merge|squash|rebase>] [--keep-branch]
-allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
+allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 ---
 
 # Merge Spinoff
@@ -32,6 +32,12 @@ This command handles WezTerm tab cleanup automatically. Sandbox processes exit w
 - `--keep-branch` - Keep the worktree branch after merge
 
 **Note:** If run from within a worktree, the worktree name is auto-detected.
+
+---
+
+## Active Worktrees
+
+!PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state list
 
 ---
 
@@ -66,7 +72,7 @@ ls -la .claude/spinoff.json
 
 **If the config exists**: Use the merge script (handles WezTerm cleanup automatically).
 
-**If the config does NOT exist**: Fall back to manual merge steps below.
+**If the config does NOT exist**: Fall back to manual merge steps. See [manual-merge.md](manual-merge.md).
 
 ### 3. Execute Merge with Script (Preferred)
 
@@ -74,17 +80,17 @@ If `.claude/spinoff.json` exists, use the merge script:
 
 ```bash
 # Default merge (into main)
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_merge.py" "<spinoff-name>"
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.merge "<spinoff-name>"
 
 # Specify target branch
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_merge.py" "<spinoff-name>" --target develop
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.merge "<spinoff-name>" --target develop
 
 # Choose merge strategy
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_merge.py" "<spinoff-name>" --strategy squash
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_merge.py" "<spinoff-name>" --strategy rebase
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.merge "<spinoff-name>" --strategy squash
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.merge "<spinoff-name>" --strategy rebase
 
 # Keep the branch after merge
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_merge.py" "<spinoff-name>" --keep-branch
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.merge "<spinoff-name>" --keep-branch
 ```
 
 The script will:
@@ -95,80 +101,7 @@ The script will:
 5. Delete the branch
 6. Update the state file
 
-### 4. Manual Merge (Fallback)
-
-If the merge script doesn't exist, follow these steps:
-
-#### 4a. Check Worktree State
-
-```bash
-# Check for uncommitted changes
-git status --porcelain
-
-# Show commits to be merged
-git log --oneline origin/main..HEAD
-```
-
-**If uncommitted changes exist**: Ask the user to commit or stash them first.
-
-#### 4b. Identify Target Branch
-
-Determine the target branch to merge into:
-- Check `$ARGUMENTS` for explicit target
-- Default to `main` or `master` (whichever exists)
-- Or ask the user if unclear
-
-#### 4c. Choose Merge Strategy
-
-Present options to the user (default: merge commit):
-
-1. **Merge commit** (recommended) - Creates explicit merge commit preserving full history
-2. **Squash merge** - Combines all commits into one clean commit
-3. **Rebase** - Replays commits on top of target for linear history
-
-#### 4d. Execute Merge
-
-**For merge commit (default):**
-
-```bash
-cd <main-repo-path>
-git checkout <target-branch>
-git merge <worktree-branch> --no-ff -m "Merge worktree: <task-name>"
-```
-
-**For squash merge:**
-
-```bash
-cd <main-repo-path>
-git checkout <target-branch>
-git merge --squash <worktree-branch>
-git commit -m "Complete: <task-name>"
-```
-
-**For rebase:**
-
-```bash
-# First rebase worktree onto target
-cd <worktree-path>
-git rebase <target-branch>
-
-# Then fast-forward merge
-cd <main-repo-path>
-git checkout <target-branch>
-git merge <worktree-branch> --ff-only
-```
-
-#### 4e. Clean Up
-
-```bash
-# Remove the worktree
-git worktree remove <worktree-path>
-
-# Delete the branch
-git branch -d <worktree-branch>
-```
-
-### 5. Handle Conflicts
+### 4. Handle Conflicts
 
 If conflicts occur during merge:
 
@@ -180,7 +113,7 @@ If conflicts occur during merge:
    - Stage the resolved file: `git add <file>`
 3. Complete the merge: `git commit`
 
-### 6. Report Result
+### 5. Report Result
 
 Provide a summary:
 
@@ -210,21 +143,7 @@ The merge script provides descriptive error messages:
 | Merge conflict | `Error: Merge conflict. Resolve manually:` followed by conflicting files and instructions |
 | Branch in use | `Error: Cannot delete branch - it's checked out elsewhere` |
 
-### Uncommitted Changes in Main Repo
-
-If the target branch has uncommitted changes:
-- Warn the user
-- Suggest stashing: `git stash`
-- Or committing first
-
-### Merge Conflicts
-
-When conflicts occur:
-- Stay calm and methodical
-- Show each conflict clearly
-- Explain both versions (theirs vs ours)
-- Let the user decide resolution strategy
-- Test after resolution if possible
+For merge strategy details, see [strategies.md](strategies.md).
 
 ---
 

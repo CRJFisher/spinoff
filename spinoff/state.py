@@ -242,9 +242,9 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  worktree_state.py list              List all tracked worktrees
-  worktree_state.py show fix-auth     Show details for 'fix-auth'
-  worktree_state.py path              Print state file path
+  python -m spinoff.state list              List all tracked worktrees
+  python -m spinoff.state show fix-auth     Show details for 'fix-auth'
+  python -m spinoff.state path              Print state file path
 """,
     )
     parser.add_argument(

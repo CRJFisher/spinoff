@@ -1,10 +1,10 @@
-"""Tests for spinoff_config.py."""
+"""Tests for spinoff.config."""
 
 import json
 
 import pytest
 
-from spinoff_config import SpinoffConfig, load_config, save_config, CONFIG_FILENAME
+from spinoff.config import SpinoffConfig, load_config, save_config, CONFIG_FILENAME
 
 
 class TestDefaults:

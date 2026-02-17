@@ -1,11 +1,11 @@
-"""Tests for create_worktree.py."""
+"""Tests for spinoff.create."""
 
 import os
 import stat
 
 import pytest
 
-from create_worktree import sanitize_task_name, write_startup_script
+from spinoff.create import sanitize_task_name, write_startup_script
 
 
 class TestSanitizeTaskName:

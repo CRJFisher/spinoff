@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from spinoff_config import SpinoffConfig, CONFIG_FILENAME
+from spinoff.config import SpinoffConfig, CONFIG_FILENAME
 
 
 @pytest.fixture

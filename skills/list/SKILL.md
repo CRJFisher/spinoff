@@ -1,7 +1,7 @@
 ---
 name: list
 description: List all active spinoff worktrees with their status, branch, and WezTerm pane liveness.
-allowed-tools: Bash(python *)
+allowed-tools: Bash(python *), Bash(PYTHONPATH=*)
 ---
 
 # List Spinoffs
@@ -18,14 +18,20 @@ Show all tracked spinoff worktrees for the current project.
 
 ---
 
+## Current State
+
+!PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state list
+
+---
+
 ## Your Task
 
 ### 1. List worktree state
 
-Run the worktree state script to get all tracked spinoffs:
+The current state is pre-loaded above. If you need to refresh:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_state.py" list
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state list
 ```
 
 ### 2. Check WezTerm pane liveness
@@ -33,7 +39,7 @@ python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_state.py" list
 If there are active worktrees, check which WezTerm panes are still alive:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_wezterm.py" list
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.wezterm list
 ```
 
 ### 3. Present results

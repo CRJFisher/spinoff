@@ -1,7 +1,7 @@
 ---
 name: init
 description: Initialize a project for spinoff support. Analyzes tech stack and creates spinoff config.
-allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep, Write, Edit
+allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep, Write, Edit
 ---
 
 # Spinoff Init
@@ -40,29 +40,9 @@ If this fails, inform the user and exit.
 
 ### 2. Analyze project structure
 
-Identify the technology stack by checking for:
-
-| File                                  | Stack   |
-| ------------------------------------- | ------- |
-| `package.json`                        | Node.js |
-| `pyproject.toml` / `requirements.txt` | Python  |
-| `Cargo.toml`                          | Rust    |
-| `go.mod`                              | Go      |
-| `pom.xml` / `build.gradle`            | Java    |
-| `Gemfile`                             | Ruby    |
+Identify the technology stack and determine the build command. For detection tables and build commands, see [tech-stacks.md](tech-stacks.md).
 
 Find state files that should be copied: `.env`, `.env.local`, `.env.development`, local config files.
-
-Determine the build command:
-
-| Stack          | Build Command                    |
-| -------------- | -------------------------------- |
-| Node.js (npm)  | `npm install && npm run build`   |
-| Node.js (pnpm) | `pnpm install && pnpm run build` |
-| Node.js (yarn) | `yarn install && yarn build`     |
-| Python         | `pip install -e .`               |
-| Rust           | `cargo build`                    |
-| Go             | `go build ./...`                 |
 
 ### 3. Present findings and request confirmation
 
@@ -89,7 +69,7 @@ Add `.worktrees/` to `.gitignore` if not already present. Commit with message: `
 Write the detected configuration to `.claude/spinoff.json`:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/spinoff_config.py"
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.config save --project-name "<name>" --state-files .env --build-command "pnpm install"
 ```
 
 Or write the file directly. The format is:
@@ -118,66 +98,7 @@ Provide:
 
 1. **Config location**: `.claude/spinoff.json`
 2. **Configuration**: What state files and build command were configured
-3. **Usage examples**:
-   - Create spinoff: `/spinoff:new my-feature`
-   - With base branch: `/spinoff:new my-feature --base develop`
-   - With task description: `/spinoff:new my-feature --task "Implement feature X"`
-   - Plan mode: `/spinoff:new my-feature --mode plan`
-4. **Slash commands**: Explain the available slash commands (see below)
-
----
-
-## Slash Commands
-
-After setup, the user can use these slash commands in Claude Code:
-
-### `/spinoff:new <task-name>`
-
-Creates a new spinoff with sandbox isolation and WezTerm tab.
-
-```
-/spinoff:new fix-auth-bug
-/spinoff:new feat-dark-mode --base develop
-/spinoff:new JIRA-1234 --task "Implement user profile page"
-/spinoff:new explore-auth --task "analyze the auth architecture" --mode plan
-```
-
-**Options:**
-
-| Option   | Default                | Description                                               |
-| -------- | ---------------------- | --------------------------------------------------------- |
-| `--base` | current branch         | Base branch for the worktree                              |
-| `--task` | none                   | Task description to pass to Claude                        |
-| `--mode` | project `default_mode` | `plan` (read-only) or `implement` (sandbox + auto-commit) |
-
-**What it does:**
-
-1. Creates git worktree at `.worktrees/<task-name>`
-2. Creates branch `worktree/<task-name>`
-3. Copies state files and runs build command
-4. Opens WezTerm tab with Claude agent in the selected mode:
-   - **plan**: Read-only exploration (`--permission-mode plan`, no sandbox)
-   - **implement**: Sandboxed execution with auto-commit instructions
-
-### `/spinoff:merge <spinoff-name>`
-
-Merges spinoff back to target branch and cleans up.
-
-```
-/spinoff:merge fix-auth-bug
-/spinoff:merge fix-auth-bug --target develop
-/spinoff:merge fix-auth-bug --strategy squash
-```
-
-**What it does:**
-
-1. Closes WezTerm tab if one exists
-2. Merges changes (merge/squash/rebase)
-3. Removes worktree directory
-4. Deletes branch
-5. Updates state file
-
-**IMPORTANT**: Tell the user about these commands! They provide a convenient way to manage spinoffs without remembering script paths.
+3. **Usage examples** and **Slash commands**: See [commands-reference.md](commands-reference.md) for the full list to show the user.
 
 ---
 
@@ -188,8 +109,8 @@ Worktree state is tracked in `.worktrees/.state.json`.
 You can inspect state with:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_state.py" list
-python "$CLAUDE_PLUGIN_ROOT/scripts/worktree_state.py" show <name>
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state list
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state show <name>
 ```
 
 ---

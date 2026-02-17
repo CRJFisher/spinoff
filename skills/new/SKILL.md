@@ -2,7 +2,7 @@
 name: new
 description: Spin off a new autonomous Claude agent in an isolated git worktree with WezTerm tab and sandbox.
 argument-hint: <task-name> [--base <branch>] [--task <description>] [--mode <plan|implement>] [--model <model>]
-allowed-tools: Bash(git *), Bash(python *), Read, Glob, Grep
+allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 ---
 
 # Create Spinoff
@@ -78,88 +78,18 @@ If no task name provided, ask the user for a descriptive task name. Good example
 
 ### 3a. Determine Agent Mode
 
-Decide the agent mode (`plan` or `implement`) using these rules in order:
-
-1. **Explicit `--mode` flag** → use it, done.
-2. **Task description heuristics** — if `--task` was provided, scan for keyword signals:
-   - **Plan signals**: plan, design, explore, investigate, analyze, compare, evaluate, research, review, assess, propose, understand, audit
-   - **Implement signals**: implement, fix, build, create, add, update, refactor, migrate, remove, delete, replace, write, change, move, rename, upgrade, convert, integrate
-   - If a strong signal is found → suggest that mode, confirm with user.
-3. **Project default** — read `default_mode` from `.claude/spinoff.json` and confirm with user.
-
-Tell the user the chosen mode and what it means:
-- **plan**: Read-only exploration. Agent uses `--permission-mode plan` (no sandbox). Good for investigation, design, and code review.
-- **implement**: Sandboxed execution. Agent can write files and run commands. Auto-commits work before finishing. Good for bug fixes, features, and refactoring.
+For mode selection heuristics (keyword scanning, fallback rules), see [mode-heuristics.md](mode-heuristics.md).
 
 ### 4. Find Related Task/Spec Files
 
-Search for existing task or spec files that match the task name:
-
-**Spec-Kit files** (check `specs/` directory):
-Use the Glob tool to find specs matching the task name:
-- `specs/**/*<task-name>*` — directories/files matching the task name
-- `specs/*/spec.md`, `specs/*/plan.md`, `specs/*/tasks.md` — standard spec files
-
-**Backlog tasks** (check `backlog/tasks/` directory):
-Use the Glob tool:
-- `backlog/tasks/*<task-name>*.md` — task files matching the name
-
-**General task/spec patterns**:
-Use the Glob tool with broader patterns:
-- `**/specs/*<task-name>*.md`
-- `**/tasks/*<task-name>*.md`
-- `**/backlog/*<task-name>*.md`
-
-If matching files are found:
-- List them to the user for confirmation
-- Append the file paths to the `--task` description
-
-Example: If user runs `/spinoff:new feat-auth` and `specs/auth/spec.md` exists, the task becomes:
-```
---task "Implement feature. Relevant files: specs/auth/spec.md, specs/auth/plan.md, specs/auth/tasks.md"
-```
-
-### 4a. Verify Referenced Files Exist and Are Committed
-
-Before creating the worktree, verify that all referenced files exist and are committed to the base branch. Files that aren't committed to the base won't be available in the new worktree.
-
-**1. Collect all referenced file paths:**
-- Files discovered by Glob in step 4 (spec files, task files)
-- Files the user explicitly mentioned in their request or `--task` description
-- Any other files discussed in the conversation that the task depends on
-
-**2. Determine the base branch:**
-Use `--base` arg if provided, otherwise the current branch:
-```bash
-git rev-parse --abbrev-ref HEAD
-```
-
-**3. Check each file exists and is committed** to the base branch:
-```bash
-git cat-file -e <base>:<relative-path> 2>/dev/null
-```
-Non-zero exit means the file doesn't exist on the base branch (untracked, uncommitted, or only on a different branch).
-
-**4. If all files exist on the base branch:** Proceed to step 5.
-
-**5. If any files are missing:**
-- List the problematic files to the user.
-- Explain: "These files don't exist or aren't committed to `<base>`. They won't be available in the new worktree."
-- **If base is the current branch** (common case): Offer to commit them:
-  ```bash
-  git add <file1> <file2> ...
-  git commit -m "Add task files for <task-name>"
-  ```
-- **If base is a different branch** (`--base` specified): Warn the user. Suggest they commit the files to the base branch first, or proceed without them.
-- **If user declines to commit**: Ask if they want to proceed anyway (the task description will still reference the paths, but the agent won't be able to read them).
-- **Do NOT proceed silently** — always surface the issue.
+Search for existing task or spec files that match the task name. For search patterns and verification workflow, see [spec-patterns.md](spec-patterns.md).
 
 ### 5. Execute the Script
 
 Run the spinoff creation script with parsed arguments:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/create_worktree.py" "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--mode <plan|implement>] [--model <model>]
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.create "<task-name>" [--base <branch>] [--task "<description with spec file paths>"] [--mode <plan|implement>] [--model <model>]
 ```
 
 ### 6. Report Result

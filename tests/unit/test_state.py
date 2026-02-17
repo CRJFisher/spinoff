@@ -1,10 +1,10 @@
-"""Tests for worktree_state.py."""
+"""Tests for spinoff.state."""
 
 import json
 
 import pytest
 
-from worktree_state import (
+from spinoff.state import (
     WorktreeEntry,
     WorktreeState,
     get_state_file_path,

@@ -15,12 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-# Ensure sibling modules are importable (plugin directory)
-sys.path.insert(0, str(Path(__file__).parent))
-
-from spinoff_config import load_config
-from worktree_state import load_state, remove_worktree, get_state_file_path
-from worktree_wezterm import wezterm_available, close_tab, pane_exists
+from spinoff.config import load_config
+from spinoff.state import load_state, remove_worktree, get_state_file_path
+from spinoff.wezterm import wezterm_available, close_tab, pane_exists
 
 
 @dataclass

@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from worktree_state import load_state
+from spinoff.state import load_state
 
 from .conftest import run_create_worktree, run_merge_worktree
 
@@ -14,12 +14,12 @@ pytestmark = pytest.mark.e2e
 
 
 class TestLifecycle:
-    def test_full_cycle(self, test_project, spinoff_scripts):
+    def test_full_cycle(self, test_project, plugin_root):
         """Create → verify state/dir/branch/pane → commit in worktree → merge → verify cleanup."""
         project = test_project
 
         # Create
-        result = run_create_worktree(project, "cycle-test", spinoff_scripts)
+        result = run_create_worktree(project, "cycle-test", plugin_root)
         assert result.returncode == 0, result.stderr
 
         # Verify state
@@ -45,7 +45,7 @@ class TestLifecycle:
                         capture_output=True)
 
         # Merge
-        merge_result = run_merge_worktree(project, "cycle-test", spinoff_scripts)
+        merge_result = run_merge_worktree(project, "cycle-test", plugin_root)
         assert merge_result.returncode == 0, merge_result.stderr + merge_result.stdout
 
         # Verify cleanup
@@ -56,10 +56,10 @@ class TestLifecycle:
         # Verify file made it to main
         assert (project / "new_file.txt").exists()
 
-    def test_create_with_task(self, test_project, spinoff_scripts):
+    def test_create_with_task(self, test_project, plugin_root):
         """Verify startup script contains the task."""
         result = run_create_worktree(
-            test_project, "task-test", spinoff_scripts,
+            test_project, "task-test", plugin_root,
             task="fix the auth bug",
         )
         assert result.returncode == 0, result.stderr
@@ -69,10 +69,10 @@ class TestLifecycle:
         content = script.read_text()
         assert "fix the auth bug" in content
 
-    def test_create_plan_mode(self, test_project, spinoff_scripts):
+    def test_create_plan_mode(self, test_project, plugin_root):
         """Verify plan mode uses --permission-mode plan in startup script."""
         result = run_create_worktree(
-            test_project, "plan-test", spinoff_scripts,
+            test_project, "plan-test", plugin_root,
             mode="plan",
         )
         assert result.returncode == 0, result.stderr
@@ -82,7 +82,7 @@ class TestLifecycle:
         assert "--permission-mode" in content
         assert "plan" in content
 
-    def test_create_with_base(self, test_project, spinoff_scripts):
+    def test_create_with_base(self, test_project, plugin_root):
         """Verify --base stores base_branch and merge targets it."""
         project = test_project
 
@@ -96,7 +96,7 @@ class TestLifecycle:
         subprocess.run(["git", "checkout", "main"], cwd=project, check=True, capture_output=True)
 
         result = run_create_worktree(
-            project, "base-test", spinoff_scripts,
+            project, "base-test", plugin_root,
             base="develop",
         )
         assert result.returncode == 0, result.stderr
@@ -105,14 +105,16 @@ class TestLifecycle:
         entry = state.find("base-test")
         assert entry.base_branch == "develop"
 
-    def test_list_shows_active(self, test_project, spinoff_scripts):
+    def test_list_shows_active(self, test_project, plugin_root):
         """List shows active worktrees."""
-        run_create_worktree(test_project, "list-test", spinoff_scripts)
+        import os
+        run_create_worktree(test_project, "list-test", plugin_root)
 
+        env = {**os.environ, "PYTHONPATH": str(plugin_root)}
         result = subprocess.run(
-            ["python", str(spinoff_scripts / "worktree_state.py"),
+            ["python", "-m", "spinoff.state",
              "-p", str(test_project), "list"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=env,
         )
         assert result.returncode == 0
         assert "list-test" in result.stdout
