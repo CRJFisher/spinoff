@@ -23,6 +23,7 @@ class SpinoffConfig:
     build_command: str = ""
     worktree_dir: str = ".worktrees"
     default_mode: str = "implement"
+    merge_review_agents: list[str] = field(default_factory=list)
 
 
 CONFIG_FILENAME = ".claude/spinoff.json"
@@ -60,6 +61,7 @@ def load_config(project_path: Path) -> SpinoffConfig:
         build_command=data.get("build_command", ""),
         worktree_dir=data.get("worktree_dir", ".worktrees"),
         default_mode=data.get("default_mode", "implement"),
+        merge_review_agents=data.get("merge_review_agents", []),
     )
 
 
@@ -80,6 +82,7 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
         "build_command": config.build_command,
         "worktree_dir": config.worktree_dir,
         "default_mode": config.default_mode,
+        "merge_review_agents": config.merge_review_agents,
     }
 
     config_file.write_text(json.dumps(data, indent=2) + "\n")
@@ -129,6 +132,7 @@ Examples:
     save_parser.add_argument("--build-command", default="", help="Build command")
     save_parser.add_argument("--worktree-dir", default=".worktrees", help="Worktree directory")
     save_parser.add_argument("--default-mode", default="implement", choices=["plan", "implement"], help="Default agent mode (default: implement)")
+    save_parser.add_argument("--merge-review-agents", nargs="*", default=[], help="Agents to run during merge review")
 
     args = parser.parse_args()
 
@@ -139,6 +143,7 @@ Examples:
         print(f"Build command: {config.build_command}")
         print(f"Worktree dir:  {config.worktree_dir}")
         print(f"Default mode:  {config.default_mode}")
+        print(f"Review agents: {config.merge_review_agents}")
         print(f"Config file:   {args.project / CONFIG_FILENAME}")
     elif args.command == "save":
         config = SpinoffConfig(
@@ -147,6 +152,7 @@ Examples:
             build_command=args.build_command,
             worktree_dir=args.worktree_dir,
             default_mode=args.default_mode,
+            merge_review_agents=args.merge_review_agents,
         )
         save_config(args.project, config)
         print(f"Saved config to {args.project / CONFIG_FILENAME}")

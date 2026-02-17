@@ -61,6 +61,26 @@ Default to `implement` if the user has no preference.
 
 Wait for user confirmation before proceeding.
 
+### 3a. Discover and select merge review agents
+
+Run agent discovery to find available Claude Code agents:
+
+```bash
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.agents discover
+```
+
+This scans `.claude/agents/` (project-level) and `~/.claude/agents/` (global) for agent `.md` files with frontmatter.
+
+If agents are found, present each agent's name, description, and source (project/global) to the user and ask:
+
+> "Which agents should run during merge review? (Select from the list, or none to skip review)"
+
+Default: none selected.
+
+Save the selected agent names for inclusion in the config written in step 5.
+
+If no agents are found, skip this step silently and continue.
+
 ### 4. Update .gitignore
 
 Add `.worktrees/` to `.gitignore` if not already present. Commit with message: `chore: configure gitignore for worktree support`. No need to mention spinoff in the `.gitignore` or commit message.
@@ -81,7 +101,8 @@ Or write the file directly. The format is:
   "state_files": [".env", ".env.local"],
   "build_command": "pnpm install",
   "worktree_dir": ".worktrees",
-  "default_mode": "implement"
+  "default_mode": "implement",
+  "merge_review_agents": ["refactor-reviewer"]
 }
 ```
 
@@ -92,6 +113,7 @@ Where:
 - `build_command` — Command to run after creating a worktree (e.g., `pnpm install`)
 - `worktree_dir` — Directory for worktrees (default: `.worktrees`)
 - `default_mode` — Default agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit)
+- `merge_review_agents` — List of agent names to run during merge review (default: `[]`)
 
 ### 6. Report the result
 

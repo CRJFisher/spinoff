@@ -1,9 +1,9 @@
 ---
 name: merge
 description: Merge a spinoff's changes back to target branch with cleanup of WezTerm tabs and git branches.
-argument-hint: [spinoff-name] [--target <branch>] [--strategy <merge|squash|rebase>] [--keep-branch]
+argument-hint: [spinoff-name] [--target <branch>] [--strategy <merge|squash|rebase>] [--keep-branch] [--skip-review]
 disable-model-invocation: true
-allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
+allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep, Task
 ---
 
 # Merge Spinoff
@@ -26,11 +26,13 @@ This command handles WezTerm tab cleanup automatically. Sandbox processes exit w
 - `/spinoff:merge fix-auth-bug --strategy squash` - Squash all commits
 - `/spinoff:merge fix-auth-bug --strategy rebase` - Rebase for linear history
 - `/spinoff:merge fix-auth-bug --keep-branch` - Don't delete branch after merge
+- `/spinoff:merge fix-auth-bug --skip-review` - Skip review agents
 
 **Options:**
 - `--target <branch>` - Target branch to merge into (default: branch the spinoff was created from, or main)
 - `--strategy <merge|squash|rebase>` - Merge strategy (default: merge)
 - `--keep-branch` - Keep the worktree branch after merge
+- `--skip-review` - Skip running review agents before merge
 
 **Note:** If run from within a worktree, the worktree name is auto-detected.
 
@@ -75,7 +77,51 @@ ls -la .claude/spinoff.json
 
 **If the config does NOT exist**: Fall back to manual merge steps. See [manual-merge.md](manual-merge.md).
 
-### 3. Execute Merge with Script (Preferred)
+### 3. Run Review Agents
+
+Skip this step if `--skip-review` was passed as an argument.
+
+Check if merge review agents are configured:
+
+```bash
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.agents list-configured
+```
+
+If no agents are configured, skip to step 4.
+
+Validate the configured agents exist:
+
+```bash
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.agents check <agent-names...>
+```
+
+Warn the user about any missing agents and skip them.
+
+For each valid agent, gather the diff context:
+
+```bash
+# Full diff between target and worktree branch
+git diff <target>...<worktree-branch>
+
+# File list
+git diff --name-only <target>...<worktree-branch>
+```
+
+For very large diffs (over 50,000 characters), provide only the file list and a summary of changes to the agents instead of the full diff.
+
+Invoke each agent sequentially using the Task tool:
+
+```
+Task(subagent_type="<agent-name>", prompt="Review these changes being merged from <worktree-branch> into <target>.\n\nFiles changed:\n<file-list>\n\nDiff:\n<diff-content>")
+```
+
+After all agents have run, present the consolidated findings to the user and ask:
+
+> "Review agents have completed. Proceed with merge?"
+
+If the user says no, stop. Do not execute the merge.
+
+### 4. Execute Merge with Script (Preferred)
 
 If `.claude/spinoff.json` exists, use the merge script:
 
@@ -102,7 +148,7 @@ The script will:
 5. Delete the branch
 6. Update the state file
 
-### 4. Handle Conflicts
+### 5. Handle Conflicts
 
 If conflicts occur during merge:
 
@@ -114,7 +160,7 @@ If conflicts occur during merge:
    - Stage the resolved file: `git add <file>`
 3. Complete the merge: `git commit`
 
-### 5. Report Result
+### 6. Report Result
 
 Provide a summary:
 

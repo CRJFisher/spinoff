@@ -38,15 +38,17 @@ Merges spinoff back to target branch and cleans up.
 /spinoff:merge fix-auth-bug
 /spinoff:merge fix-auth-bug --target develop
 /spinoff:merge fix-auth-bug --strategy squash
+/spinoff:merge fix-auth-bug --skip-review
 ```
 
 **What it does:**
 
-1. Closes WezTerm tab if one exists
-2. Merges changes (merge/squash/rebase)
-3. Removes worktree directory
-4. Deletes branch
-5. Updates state file
+1. Runs configured review agents on the diff (unless `--skip-review`)
+2. Closes WezTerm tab if one exists
+3. Merges changes (merge/squash/rebase)
+4. Removes worktree directory
+5. Deletes branch
+6. Updates state file
 
 ## `/spinoff:list`
 
