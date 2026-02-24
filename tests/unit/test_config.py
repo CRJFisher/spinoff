@@ -11,7 +11,7 @@ class TestDefaults:
     def test_defaults(self):
         config = SpinoffConfig(project_name="my-app")
         assert config.default_mode == "implement"
-        assert config.worktree_dir == ".worktrees"
+        assert config.worktree_dir == ".claude/worktrees"
         assert config.build_command == ""
         assert config.state_files == []
         assert config.merge_review_agents == []
@@ -82,7 +82,7 @@ class TestLoadConfig:
         assert loaded.project_name == "minimal"
         assert loaded.state_files == []
         assert loaded.build_command == ""
-        assert loaded.worktree_dir == ".worktrees"
+        assert loaded.worktree_dir == ".claude/worktrees"
         assert loaded.default_mode == "implement"
         assert loaded.merge_review_agents == []
 

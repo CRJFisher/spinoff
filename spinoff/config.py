@@ -21,7 +21,7 @@ class SpinoffConfig:
     project_name: str
     state_files: list[str] = field(default_factory=list)
     build_command: str = ""
-    worktree_dir: str = ".worktrees"
+    worktree_dir: str = ".claude/worktrees"
     default_mode: str = "implement"
     merge_review_agents: list[str] = field(default_factory=list)
 
@@ -59,7 +59,7 @@ def load_config(project_path: Path) -> SpinoffConfig:
         project_name=data["project_name"],
         state_files=data.get("state_files", []),
         build_command=data.get("build_command", ""),
-        worktree_dir=data.get("worktree_dir", ".worktrees"),
+        worktree_dir=data.get("worktree_dir", ".claude/worktrees"),
         default_mode=data.get("default_mode", "implement"),
         merge_review_agents=data.get("merge_review_agents", []),
     )
@@ -130,7 +130,7 @@ Examples:
     save_parser.add_argument("--project-name", required=True, help="Project name")
     save_parser.add_argument("--state-files", nargs="*", default=[], help="State files to copy")
     save_parser.add_argument("--build-command", default="", help="Build command")
-    save_parser.add_argument("--worktree-dir", default=".worktrees", help="Worktree directory")
+    save_parser.add_argument("--worktree-dir", default=".claude/worktrees", help="Worktree directory")
     save_parser.add_argument("--default-mode", default="implement", choices=["plan", "implement"], help="Default agent mode (default: implement)")
     save_parser.add_argument("--merge-review-agents", nargs="*", default=[], help="Agents to run during merge review")
 

@@ -30,7 +30,7 @@ class TestLifecycle:
         assert entry.base_branch == "main"
 
         # Verify dir and branch exist
-        wt_path = project / ".worktrees" / "cycle-test"
+        wt_path = project / ".claude" / "worktrees" / "cycle-test"
         assert wt_path.exists()
         branches = subprocess.run(
             ["git", "branch"], cwd=project, capture_output=True, text=True
@@ -64,7 +64,7 @@ class TestLifecycle:
         )
         assert result.returncode == 0, result.stderr
 
-        script = test_project / ".worktrees" / "task-test.start.sh"
+        script = test_project / ".claude" / "worktrees" / "task-test.start.sh"
         assert script.exists()
         content = script.read_text()
         assert "fix the auth bug" in content
@@ -77,7 +77,7 @@ class TestLifecycle:
         )
         assert result.returncode == 0, result.stderr
 
-        script = test_project / ".worktrees" / "plan-test.start.sh"
+        script = test_project / ".claude" / "worktrees" / "plan-test.start.sh"
         content = script.read_text()
         assert "--permission-mode" in content
         assert "plan" in content

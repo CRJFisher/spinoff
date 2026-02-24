@@ -17,7 +17,7 @@ class TestErrorCases:
         run_create_worktree(project, "dirty-wt", plugin_root)
 
         # Create uncommitted change
-        wt = project / ".worktrees" / "dirty-wt"
+        wt = project / ".claude" / "worktrees" / "dirty-wt"
         (wt / "dirty.txt").write_text("uncommitted\n")
 
         result = run_merge_worktree(project, "dirty-wt", plugin_root)
@@ -30,7 +30,7 @@ class TestErrorCases:
         run_create_worktree(project, "bad-target", plugin_root)
 
         # Make a commit so it passes the uncommitted check
-        wt = project / ".worktrees" / "bad-target"
+        wt = project / ".claude" / "worktrees" / "bad-target"
         (wt / "file.txt").write_text("content\n")
         subprocess.run(["git", "add", "."], cwd=wt, check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "work"], cwd=wt, check=True, capture_output=True)

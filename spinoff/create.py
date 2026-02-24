@@ -52,7 +52,7 @@ def write_startup_script(
     Write a startup script that runs the build and then Claude.
 
     The script is placed as a sibling to the worktree directory inside
-    .worktrees/, which is already gitignored. Each command is on its own
+    the worktree_dir (e.g. .claude/worktrees/), which is gitignored. Each command is on its own
     line — no nested quoting needed.
 
     On any failure (build or Claude exit), `exec bash` keeps the tab alive

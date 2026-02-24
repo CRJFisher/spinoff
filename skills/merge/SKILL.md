@@ -54,10 +54,10 @@ Determine if you're currently in a worktree:
 git rev-parse --git-dir
 ```
 
-If the output contains `/.worktrees/`, you're in a worktree. Extract:
+If the output contains `/.claude/worktrees/`, you're in a worktree. Extract:
 - **Worktree path**: Current directory
 - **Worktree branch**: `git branch --show-current`
-- **Main repo path**: Parent of `.worktrees` directory
+- **Main repo path**: Parent of `.claude/worktrees` directory
 
 If NOT in a worktree, list available worktrees and ask which one to merge:
 
@@ -172,7 +172,7 @@ Merge Complete
   Commits merged: <count>
 
 Cleanup:
-  Worktree removed: /path/to/.worktrees/<task-name>
+  Worktree removed: /path/to/.claude/worktrees/<task-name>
   Branch deleted: worktree/<task-name>
   WezTerm tab closed (if applicable)
 ```
@@ -185,7 +185,7 @@ The merge script provides descriptive error messages:
 
 | Error | Message |
 |-------|---------|
-| Worktree not found | `Error: Worktree 'name' not found at .worktrees/name` |
+| Worktree not found | `Error: Worktree 'name' not found at .claude/worktrees/name` |
 | Uncommitted changes | `Error: Worktree has uncommitted changes. Commit or stash first:` followed by git status output |
 | Merge conflict | `Error: Merge conflict. Resolve manually:` followed by conflicting files and instructions |
 | Branch in use | `Error: Cannot delete branch - it's checked out elsewhere` |

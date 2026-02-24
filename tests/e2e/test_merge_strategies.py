@@ -14,7 +14,7 @@ pytestmark = pytest.mark.e2e
 
 def _make_commit_in_worktree(project, name):
     """Helper to make a commit in a worktree."""
-    wt = project / ".worktrees" / name
+    wt = project / ".claude" / "worktrees" / name
     (wt / f"{name}.txt").write_text(f"content for {name}\n")
     subprocess.run(["git", "add", "."], cwd=wt, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", f"Work on {name}"], cwd=wt, check=True,

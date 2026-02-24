@@ -15,7 +15,7 @@ def tmp_project(tmp_path):
         project_name="test-project",
         state_files=[],
         build_command="",
-        worktree_dir=".worktrees",
+        worktree_dir=".claude/worktrees",
         default_mode="implement",
     )
     config_file = tmp_path / CONFIG_FILENAME

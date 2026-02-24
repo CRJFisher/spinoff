@@ -83,7 +83,7 @@ If no agents are found, skip this step silently and continue.
 
 ### 4. Update .gitignore
 
-Add `.worktrees/` to `.gitignore` if not already present. Commit with message: `chore: configure gitignore for worktree support`. No need to mention spinoff in the `.gitignore` or commit message.
+Add `.claude/worktrees/` to `.gitignore` if not already present. Commit with message: `chore: configure gitignore for worktree support`. No need to mention spinoff in the `.gitignore` or commit message.
 
 ### 5. Write spinoff configuration
 
@@ -100,7 +100,7 @@ Or write the file directly. The format is:
   "project_name": "<detected-project-name>",
   "state_files": [".env", ".env.local"],
   "build_command": "pnpm install",
-  "worktree_dir": ".worktrees",
+  "worktree_dir": ".claude/worktrees",
   "default_mode": "implement",
   "merge_review_agents": ["refactor-reviewer"]
 }
@@ -111,7 +111,7 @@ Where:
 - `project_name` — Name of the project (typically the repo directory name)
 - `state_files` — List of files to copy into each worktree (e.g., `.env`)
 - `build_command` — Command to run after creating a worktree (e.g., `pnpm install`)
-- `worktree_dir` — Directory for worktrees (default: `.worktrees`)
+- `worktree_dir` — Directory for worktrees (default: `.claude/worktrees`)
 - `default_mode` — Default agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit)
 - `merge_review_agents` — List of agent names to run during merge review (default: `[]`)
 
@@ -127,7 +127,7 @@ Provide:
 
 ## State File Location
 
-Worktree state is tracked in `.worktrees/.state.json`.
+Worktree state is tracked in `.claude/worktrees/.state.json`.
 
 You can inspect state with:
 

@@ -23,7 +23,7 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
 
 **What it does:**
 
-1. Creates git worktree at `.worktrees/<task-name>`
+1. Creates git worktree at `.claude/worktrees/<task-name>`
 2. Creates branch `worktree/<task-name>`
 3. Copies state files and runs build command
 4. Opens WezTerm tab with Claude agent in the selected mode:

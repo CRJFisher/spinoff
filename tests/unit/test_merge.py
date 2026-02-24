@@ -31,7 +31,7 @@ class TestMergeWorktree:
     @patch("spinoff.merge.load_config")
     def test_missing_worktree_dir(self, mock_load_config, tmp_path):
         mock_config = MagicMock()
-        mock_config.worktree_dir = ".worktrees"
+        mock_config.worktree_dir = ".claude/worktrees"
         mock_load_config.return_value = mock_config
 
         result = merge_worktree("nonexistent", project_path=tmp_path)
@@ -41,11 +41,11 @@ class TestMergeWorktree:
     @patch("spinoff.merge.load_config")
     def test_unknown_strategy(self, mock_load_config, tmp_path):
         mock_config = MagicMock()
-        mock_config.worktree_dir = ".worktrees"
+        mock_config.worktree_dir = ".claude/worktrees"
         mock_load_config.return_value = mock_config
 
         # Create the worktree dir so it passes the exists check
-        wt_dir = tmp_path / ".worktrees" / "test-wt"
+        wt_dir = tmp_path / ".claude" / "worktrees" / "test-wt"
         wt_dir.mkdir(parents=True)
 
         # Mock load_state and has_uncommitted_changes and target branch check

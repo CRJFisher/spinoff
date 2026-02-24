@@ -135,7 +135,7 @@ Provide a clear summary:
 
 ```
 Spinoff Created
-  Location: /path/to/repo/.worktrees/<task-name>
+  Location: /path/to/repo/.claude/worktrees/<task-name>
   Branch: worktree/<task-name>
   Mode: implement (sandbox + auto-commit)
   WezTerm tab: wt: <task-name>

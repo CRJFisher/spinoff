@@ -45,7 +45,7 @@ def test_project(tmp_path):
         "project_name": f"e2e-{uuid.uuid4().hex[:8]}",
         "state_files": [],
         "build_command": "",
-        "worktree_dir": ".worktrees",
+        "worktree_dir": ".claude/worktrees",
         "default_mode": "implement",
     }
     (config_dir / "spinoff.json").write_text(json.dumps(config, indent=2) + "\n")
@@ -79,7 +79,7 @@ def test_project_pair(tmp_path):
             "project_name": f"e2e-{label}-{uuid.uuid4().hex[:8]}",
             "state_files": [],
             "build_command": "",
-            "worktree_dir": ".worktrees",
+            "worktree_dir": ".claude/worktrees",
             "default_mode": "implement",
         }
         (config_dir / "spinoff.json").write_text(json.dumps(config, indent=2) + "\n")
