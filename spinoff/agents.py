@@ -137,25 +137,6 @@ def cmd_check(project_path: Path, names: list[str]) -> None:
             print(f"  {name}")
 
 
-def cmd_list_configured(project_path: Path) -> None:
-    """List agents configured in spinoff.json."""
-    from spinoff.config import load_config
-
-    config = load_config(project_path)
-    if not config.merge_review_agents:
-        print("No merge review agents configured.")
-        return
-
-    print(f"Configured merge review agents ({len(config.merge_review_agents)}):")
-    found, missing = check_configured_agents(
-        config.merge_review_agents, project_path
-    )
-    for a in found:
-        print(f"  {a.name} ({a.source}): {a.description}")
-    for name in missing:
-        print(f"  {name} (MISSING)")
-
-
 if __name__ == "__main__":
     import argparse
     import subprocess
@@ -178,7 +159,6 @@ if __name__ == "__main__":
 Examples:
   python -m spinoff.agents discover
   python -m spinoff.agents check refactor-reviewer code-reviewer
-  python -m spinoff.agents list-configured
 """,
     )
     parser.add_argument(
@@ -197,19 +177,12 @@ Examples:
     check_parser = subparsers.add_parser("check", help="Check if agents exist")
     check_parser.add_argument("names", nargs="+", help="Agent names to check")
 
-    # list-configured command
-    subparsers.add_parser(
-        "list-configured", help="List agents configured in spinoff.json"
-    )
-
     args = parser.parse_args()
 
     if args.command == "discover":
         cmd_discover(args.project)
     elif args.command == "check":
         cmd_check(args.project, args.names)
-    elif args.command == "list-configured":
-        cmd_list_configured(args.project)
     else:
         parser.print_help()
         sys.exit(1)

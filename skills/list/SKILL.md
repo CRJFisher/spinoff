@@ -47,6 +47,7 @@ PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.wezterm list
 ### 3. Present results
 
 Show a table with columns:
+
 - **Name** — spinoff name
 - **Branch** — git branch
 - **Path** — worktree path
@@ -59,7 +60,6 @@ If no spinoffs are tracked, tell the user and suggest `/spinoff:new <task-name>`
 ## Related Commands
 
 - **`/spinoff:new`** — Create a new spinoff
-- **`/spinoff:merge`** — Merge and clean up a spinoff
 - **`/spinoff:init`** — Initialize spinoff support
 
 $ARGUMENTS

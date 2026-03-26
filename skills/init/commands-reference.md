@@ -30,26 +30,6 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
    - **plan**: Read-only exploration (`--permission-mode plan`, no sandbox)
    - **implement**: Sandboxed execution with auto-commit instructions
 
-## `/spinoff:merge <spinoff-name>`
-
-Merges spinoff back to target branch and cleans up.
-
-```
-/spinoff:merge fix-auth-bug
-/spinoff:merge fix-auth-bug --target develop
-/spinoff:merge fix-auth-bug --strategy squash
-/spinoff:merge fix-auth-bug --skip-review
-```
-
-**What it does:**
-
-1. Runs configured review agents on the diff (unless `--skip-review`)
-2. Closes WezTerm tab if one exists
-3. Merges changes (merge/squash/rebase)
-4. Removes worktree directory
-5. Deletes branch
-6. Updates state file
-
 ## `/spinoff:list`
 
 Lists all tracked spinoffs with their status and WezTerm pane liveness.

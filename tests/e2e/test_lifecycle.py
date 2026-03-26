@@ -1,13 +1,12 @@
 """E2E tests for the full spinoff lifecycle."""
 
-import json
 import subprocess
 
 import pytest
 
 from spinoff.state import load_state
 
-from .conftest import run_create_worktree, run_merge_worktree
+from .conftest import run_create_worktree
 
 
 pytestmark = pytest.mark.e2e
@@ -15,7 +14,7 @@ pytestmark = pytest.mark.e2e
 
 class TestLifecycle:
     def test_full_cycle(self, test_project, plugin_root):
-        """Create → verify state/dir/branch/pane → commit in worktree → merge → verify cleanup."""
+        """Create → verify state/dir/branch/pane."""
         project = test_project
 
         # Create
@@ -36,25 +35,6 @@ class TestLifecycle:
             ["git", "branch"], cwd=project, capture_output=True, text=True
         ).stdout
         assert "worktree/cycle-test" in branches
-
-        # Make a commit in the worktree
-        (wt_path / "new_file.txt").write_text("hello\n")
-        subprocess.run(["git", "add", "new_file.txt"], cwd=wt_path, check=True,
-                        capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Add new file"], cwd=wt_path, check=True,
-                        capture_output=True)
-
-        # Merge
-        merge_result = run_merge_worktree(project, "cycle-test", plugin_root)
-        assert merge_result.returncode == 0, merge_result.stderr + merge_result.stdout
-
-        # Verify cleanup
-        assert not wt_path.exists()
-        state = load_state(project)
-        assert state.find("cycle-test") is None
-
-        # Verify file made it to main
-        assert (project / "new_file.txt").exists()
 
     def test_create_with_task(self, test_project, plugin_root):
         """Verify startup script contains the task."""
@@ -83,7 +63,7 @@ class TestLifecycle:
         assert "plan" in content
 
     def test_create_with_base(self, test_project, plugin_root):
-        """Verify --base stores base_branch and merge targets it."""
+        """Verify --base stores base_branch correctly."""
         project = test_project
 
         # Create develop branch
@@ -103,6 +83,7 @@ class TestLifecycle:
 
         state = load_state(project)
         entry = state.find("base-test")
+        assert entry is not None
         assert entry.base_branch == "develop"
 
     def test_list_shows_active(self, test_project, plugin_root):

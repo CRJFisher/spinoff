@@ -32,7 +32,7 @@ COMMIT_INSTRUCTIONS = (
     "1. Stage all modified and new files with `git add` (use specific file paths, not `git add .`)\n"
     "2. Create a commit with a descriptive message summarizing what was done\n"
     "3. Verify with `git status` that the working tree is clean\n"
-    "Do NOT push to a remote. The parent agent will handle merging via /spinoff:merge."
+    "Do NOT push to a remote."
 )
 
 
@@ -58,7 +58,7 @@ def get_claude_command(task: Optional[str] = None, mode: str = "implement", mode
         if model:
             cmd.extend(["--settings", json.dumps({"model": model})])
     else:  # implement
-        settings = {
+        settings: dict[str, object] = {
             "sandbox": {
                 "enabled": True,
                 "autoAllowBashIfSandboxed": True

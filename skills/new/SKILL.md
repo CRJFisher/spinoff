@@ -20,12 +20,14 @@ Each spinoff runs in Claude Code's native sandbox with a dedicated WezTerm tab. 
 ```
 
 **Examples:**
+
 - `/spinoff:new fix-auth-bug` - Create spinoff from current branch
 - `/spinoff:new feat-dark-mode --base develop` - Create from develop branch
 - `/spinoff:new JIRA-1234 --task "Implement user profile page"` - With task for agent
 - `/spinoff:new explore-auth --task "analyze the auth architecture" --mode plan` - Read-only exploration
 
 **Options:**
+
 - `--base <branch>` - Base branch to create worktree from (default: current branch)
 - `--task <description>` - Task description passed to Claude agent
 - `--mode <plan|implement>` - Agent mode: `plan` (read-only) or `implement` (sandbox + auto-commit). Falls back to project `default_mode`.
@@ -56,6 +58,7 @@ ls -la .claude/spinoff.json
 **If the config exists**: Proceed to step 3.
 
 **If the config does NOT exist**:
+
 - Inform the user: "This project doesn't have spinoff configured yet."
 - Ask if they want to set it up now.
 - If yes, ask the user to run `/spinoff:init` to create it.
@@ -64,6 +67,7 @@ ls -la .claude/spinoff.json
 ### 3. Parse Arguments
 
 Parse `$ARGUMENTS` for:
+
 - **Task name** (required, first positional argument)
 - **--base <branch>** (optional)
 - **--task <description>** (optional)
@@ -71,6 +75,7 @@ Parse `$ARGUMENTS` for:
 - **--model <model>** (optional)
 
 If no task name provided, ask the user for a descriptive task name. Good examples:
+
 - `fix-auth-timeout`
 - `feat-dark-mode`
 - `JIRA-1234-user-profile`
@@ -95,12 +100,12 @@ PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.create "<task-name>" [--base 
 ### 6. Report Result
 
 Provide the user with:
+
 - Worktree location path
 - Branch name created
 - Mode (`plan` or `implement`)
 - WezTerm tab info
 - For implement mode: mention that the agent will auto-commit its work before finishing
-- Reminder about `/spinoff:merge` when done
 
 ---
 
@@ -109,6 +114,7 @@ Provide the user with:
 ### Worktree Already Exists
 
 If the script reports the worktree already exists:
+
 - List existing worktrees: `git worktree list`
 - Suggest alternative names (append `-v2`, date, etc.)
 - Offer to navigate to the existing worktree instead
@@ -116,6 +122,7 @@ If the script reports the worktree already exists:
 ### WezTerm Not Available
 
 If WezTerm is not installed:
+
 - Inform the user to install WezTerm first
 - The spinoff infrastructure requires WezTerm for tab management
 
@@ -124,6 +131,7 @@ Note: If WezTerm is installed but not running, the script will start it automati
 ### Git Errors
 
 If git commands fail:
+
 - Check if there are uncommitted changes: `git status`
 - Ensure the base branch exists: `git branch -a | grep <base-branch>`
 
@@ -139,16 +147,12 @@ Spinoff Created
   Branch: worktree/<task-name>
   Mode: implement (sandbox + auto-commit)
   WezTerm tab: wt: <task-name>
-
-When done, merge with:
-  /spinoff:merge <task-name>
 ```
 
 ---
 
 ## Related Commands
 
-- **`/spinoff:merge`** - Merge spinoff back to target branch and clean up
 - **`/spinoff:init`** - Set up spinoff support for a project
 
 $ARGUMENTS

@@ -126,30 +126,3 @@ def run_create_worktree(project, task_name, plugin_root, **kwargs):
         cmd, cwd=project, capture_output=True, text=True, env=env,
     )
     return result
-
-
-def run_merge_worktree(project, task_name, plugin_root, **kwargs):
-    """Helper to run spinoff.merge for e2e tests."""
-    cmd = [
-        "python", "-m", "spinoff.merge", task_name,
-    ]
-
-    for key, val in kwargs.items():
-        if val is not None:
-            flag = key.replace("_", "-")
-            if isinstance(val, bool):
-                if val:
-                    cmd.append(f"--{flag}")
-            else:
-                cmd.extend([f"--{flag}", str(val)])
-
-    cmd.extend(["--project", str(project)])
-
-    env_extra = {"PYTHONPATH": str(plugin_root)}
-    import os
-    env = {**os.environ, **env_extra}
-
-    result = subprocess.run(
-        cmd, cwd=project, capture_output=True, text=True, env=env,
-    )
-    return result

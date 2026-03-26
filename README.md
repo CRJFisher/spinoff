@@ -57,18 +57,18 @@ Spin off a new autonomous Claude agent in an isolated worktree.
 
 **Modes:**
 
-| Mode | Description |
-| ---- | ----------- |
+| Mode        | Description                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------- |
 | `implement` | Sandboxed execution — agent can write files, run commands, and auto-commits before finishing |
-| `plan` | Read-only exploration — agent uses `--permission-mode plan`, no sandbox |
+| `plan`      | Read-only exploration — agent uses `--permission-mode plan`, no sandbox                      |
 
 **Options:**
 
-| Option                 | Default              | Description                                   |
-| ---------------------- | -------------------- | --------------------------------------------- |
-| `--base <branch>`      | current branch       | Base branch for the worktree                  |
-| `--task <description>` | none                 | Task description for the Claude agent         |
-| `--mode <mode>`        | project default_mode | `plan` (read-only) or `implement` (sandbox)   |
+| Option                 | Default              | Description                                 |
+| ---------------------- | -------------------- | ------------------------------------------- |
+| `--base <branch>`      | current branch       | Base branch for the worktree                |
+| `--task <description>` | none                 | Task description for the Claude agent       |
+| `--mode <mode>`        | project default_mode | `plan` (read-only) or `implement` (sandbox) |
 
 ### `/spinoff:list`
 
@@ -77,25 +77,6 @@ List all active spinoffs with their status, branch, and WezTerm pane liveness.
 ```
 /spinoff:list
 ```
-
-### `/spinoff:merge <name>`
-
-Merge a spinoff back to the target branch with full cleanup.
-
-```
-/spinoff:merge fix-auth-bug
-/spinoff:merge fix-auth-bug --target develop
-/spinoff:merge fix-auth-bug --strategy squash
-/spinoff:merge fix-auth-bug --keep-branch
-```
-
-**Options:**
-
-| Option              | Default | Description                    |
-| ------------------- | ------- | ------------------------------ |
-| `--target <branch>` | `main`  | Branch to merge into           |
-| `--strategy <mode>` | `merge` | `merge`, `squash`, or `rebase` |
-| `--keep-branch`     | false   | Keep the branch after merge    |
 
 ## How It Works
 
@@ -114,7 +95,6 @@ Your repo/
 1. **`/spinoff:init`** detects your stack and writes `.claude/spinoff.json`
 2. **`/spinoff:new`** creates a git worktree, copies state files, tracks state in `.worktrees/.state.json`, runs the build, and opens a WezTerm tab with a sandboxed Claude agent
 3. **`/spinoff:list`** shows all tracked spinoffs and their WezTerm pane status
-4. **`/spinoff:merge`** validates preconditions, merges changes back, closes the tab, removes the worktree, and deletes the branch
 
 Each spinoff runs in Claude Code's native sandbox — near-zero overhead, instant startup, no Docker required.
 

@@ -76,7 +76,9 @@ class TestWorktreeState:
         state.add(old)
         state.add(new)
         assert len(state.worktrees) == 1
-        assert state.find("fix").path == "new-path"
+        result = state.find("fix")
+        assert result is not None
+        assert result.path == "new-path"
 
     def test_remove_existing(self):
         entry = WorktreeEntry(name="fix", path="p", branch="b")
