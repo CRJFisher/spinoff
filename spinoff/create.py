@@ -2,13 +2,14 @@
 """
 Spinoff Worktree Creator
 
-Creates isolated worktrees with WezTerm + Claude Code's built-in sandbox.
-Each worktree gets a sandboxed Claude session in a WezTerm tab.
+Creates isolated worktrees with a terminal backend (cmux or WezTerm) +
+Claude Code's built-in sandbox. Each worktree gets a sandboxed Claude
+session in its own terminal workspace.
 
 Flow:
 1. Create git worktree
 2. Copy state files (.env, etc.)
-3. Open WezTerm tab that chains build command + Claude (sandbox enabled via --settings flag)
+3. Open terminal workspace that chains build command + Claude (sandbox enabled via --settings flag)
 """
 # /// script
 # requires-python = ">=3.11"
@@ -22,10 +23,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from spinoff.backends import get_backend
 from spinoff.config import load_config
-from spinoff.state import add_worktree
 from spinoff.sandbox import claude_available, get_claude_command
-from spinoff.wezterm import ensure_wezterm_running, create_tab
+from spinoff.state import add_worktree
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -103,7 +104,7 @@ def write_startup_script(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create a worktree for parallel development (WezTerm + Claude sandbox)",
+        description="Create a worktree for parallel development (terminal + Claude sandbox)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -131,11 +132,7 @@ Examples:
     )
     args = parser.parse_args()
 
-    # Validate prerequisites
-    if not ensure_wezterm_running():
-        print("Error: WezTerm CLI not available or failed to start", file=sys.stderr)
-        sys.exit(1)
-
+    # Validate Claude prerequisite
     if not claude_available():
         print("Error: Claude CLI is not available", file=sys.stderr)
         print("  Install Claude Code and try again.", file=sys.stderr)
@@ -149,6 +146,12 @@ Examples:
 
     # Load project config
     config = load_config(repo_root)
+
+    # Get terminal backend
+    backend = get_backend(config)
+    if not backend.available():
+        print("Error: No terminal backend available", file=sys.stderr)
+        sys.exit(1)
 
     # Sanitize and validate task name
     try:
@@ -203,20 +206,20 @@ Examples:
         claude_cmd=claude_cmd,
     )
     if config.build_command:
-        print(f"  Build will run in WezTerm tab: {config.build_command}")
+        print(f"  Build will run in terminal workspace: {config.build_command}")
     tab_cmd = [str(script_path)]
 
-    # Create WezTerm tab in project-specific workspace
-    print("  Opening WezTerm tab...")
-    success, pane_id, msg = create_tab(
+    # Create terminal workspace for this worktree
+    print("  Opening terminal workspace...")
+    success, terminal_id, msg = backend.create_workspace(
         title=tab_title,
         cwd=worktree_path,
         command=tab_cmd,
-        workspace=config.project_name,
+        project_name=config.project_name,
     )
     if not success:
         print(f"  Warning: {msg}", file=sys.stderr)
-        pane_id = None
+        terminal_id = None
 
     # Update state file
     add_worktree(
@@ -225,7 +228,7 @@ Examples:
         worktree_path=str(worktree_path.relative_to(repo_root)),
         branch=branch_name,
         base_branch=base,
-        pane_id=pane_id,
+        terminal_id=terminal_id,
     )
 
     # Print summary
@@ -237,8 +240,8 @@ Examples:
         print(f"Auto-commit: agent will commit before finishing")
     else:
         print(f"Plan mode: read-only exploration (no sandbox)")
-    if pane_id:
-        print(f"WezTerm tab: {tab_title} (pane {pane_id})")
+    if terminal_id:
+        print(f"Terminal: {tab_title} (id {terminal_id})")
     if args.task:
         print(f"Task: {args.task}")
 

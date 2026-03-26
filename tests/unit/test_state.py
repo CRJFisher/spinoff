@@ -22,29 +22,29 @@ class TestWorktreeEntry:
         assert d["branch"] == "worktree/fix"
         assert d["status"] == "active"
         assert "base_branch" not in d
-        assert "pane_id" not in d
+        assert "terminal_id" not in d
 
     def test_to_dict_with_optional_fields(self):
         entry = WorktreeEntry(
             name="fix", path=".claude/worktrees/fix", branch="worktree/fix",
-            base_branch="main", pane_id="42",
+            base_branch="main", terminal_id="42",
         )
         d = entry.to_dict()
         assert d["base_branch"] == "main"
-        assert d["pane_id"] == "42"
+        assert d["terminal_id"] == "42"
 
     def test_to_dict_base_branch_none_omitted(self):
         entry = WorktreeEntry(name="a", path="p", branch="b", base_branch=None)
         assert "base_branch" not in entry.to_dict()
 
-    def test_to_dict_pane_id_none_omitted(self):
-        entry = WorktreeEntry(name="a", path="p", branch="b", pane_id=None)
-        assert "pane_id" not in entry.to_dict()
+    def test_to_dict_terminal_id_none_omitted(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b", terminal_id=None)
+        assert "terminal_id" not in entry.to_dict()
 
     def test_default_values(self):
         entry = WorktreeEntry(name="x", path="p", branch="b")
         assert entry.base_branch is None
-        assert entry.pane_id is None
+        assert entry.terminal_id is None
         assert entry.status == "active"
 
 
@@ -95,7 +95,7 @@ class TestFileIO:
     def test_save_load_roundtrip(self, tmp_path):
         state = WorktreeState(worktrees=[
             WorktreeEntry(name="a", path=".claude/worktrees/a", branch="worktree/a",
-                          base_branch="main", pane_id="1"),
+                          base_branch="main", terminal_id="1"),
             WorktreeEntry(name="b", path=".claude/worktrees/b", branch="worktree/b"),
         ])
         save_state(tmp_path, state)
@@ -103,7 +103,7 @@ class TestFileIO:
         assert len(loaded.worktrees) == 2
         assert loaded.worktrees[0].name == "a"
         assert loaded.worktrees[0].base_branch == "main"
-        assert loaded.worktrees[0].pane_id == "1"
+        assert loaded.worktrees[0].terminal_id == "1"
         assert loaded.worktrees[1].name == "b"
         assert loaded.worktrees[1].base_branch is None
 

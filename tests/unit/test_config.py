@@ -14,6 +14,7 @@ class TestDefaults:
         assert config.worktree_dir == ".claude/worktrees"
         assert config.build_command == ""
         assert config.state_files == []
+        assert config.terminal_backend == ""
 
     def test_custom_values(self):
         config = SpinoffConfig(
@@ -22,12 +23,14 @@ class TestDefaults:
             build_command="npm install",
             worktree_dir="wt",
             default_mode="plan",
+            terminal_backend="wezterm",
         )
         assert config.project_name == "app"
         assert config.state_files == [".env"]
         assert config.build_command == "npm install"
         assert config.worktree_dir == "wt"
         assert config.default_mode == "plan"
+        assert config.terminal_backend == "wezterm"
 
 
 class TestSaveConfig:
@@ -60,6 +63,7 @@ class TestLoadConfig:
             build_command="pnpm install",
             worktree_dir=".wt",
             default_mode="plan",
+            terminal_backend="wezterm",
         )
         save_config(tmp_path, original)
         loaded = load_config(tmp_path)
@@ -68,6 +72,7 @@ class TestLoadConfig:
         assert loaded.build_command == original.build_command
         assert loaded.worktree_dir == original.worktree_dir
         assert loaded.default_mode == original.default_mode
+        assert loaded.terminal_backend == original.terminal_backend
 
     def test_load_missing_optional_fields(self, tmp_path):
         config_file = tmp_path / CONFIG_FILENAME
@@ -79,6 +84,7 @@ class TestLoadConfig:
         assert loaded.build_command == ""
         assert loaded.worktree_dir == ".claude/worktrees"
         assert loaded.default_mode == "implement"
+        assert loaded.terminal_backend == ""
 
     def test_load_missing_file_exits(self, tmp_path):
         with pytest.raises(SystemExit) as exc_info:

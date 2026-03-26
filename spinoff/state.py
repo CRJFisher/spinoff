@@ -6,13 +6,15 @@ Manages the .claude/worktrees/.state.json state file for tracking active worktre
 
 State file format (JSON):
 {
+  "window_id": "cmux-window-uuid",
+  "overview_workspace_id": "cmux-workspace-uuid",
   "worktrees": [
     {
       "name": "fix-auth",
       "path": ".claude/worktrees/fix-auth",
       "branch": "worktree/fix-auth",
       "base_branch": "main",
-      "pane_id": "42",
+      "terminal_id": "42",
       "status": "active"
     }
   ]
@@ -35,7 +37,7 @@ class WorktreeEntry:
     path: str
     branch: str
     base_branch: Optional[str] = None  # Branch the worktree was created from
-    pane_id: Optional[str] = None      # WezTerm pane ID (may be None if tab was closed)
+    terminal_id: Optional[str] = None   # Terminal backend ID (may be None if closed)
     status: str = "active"
 
     def to_dict(self) -> dict:
@@ -48,8 +50,8 @@ class WorktreeEntry:
         }
         if self.base_branch is not None:
             d["base_branch"] = self.base_branch
-        if self.pane_id is not None:
-            d["pane_id"] = self.pane_id
+        if self.terminal_id is not None:
+            d["terminal_id"] = self.terminal_id
         return d
 
 
@@ -57,6 +59,8 @@ class WorktreeEntry:
 class WorktreeState:
     """State of all tracked worktrees for a project."""
     worktrees: list[WorktreeEntry] = field(default_factory=list)
+    window_id: Optional[str] = None              # cmux window ID
+    overview_workspace_id: Optional[str] = None   # cmux overview workspace ID
 
     def find(self, name: str) -> Optional[WorktreeEntry]:
         """Find a worktree by name."""
@@ -100,13 +104,16 @@ def load_state(project_path: Path) -> WorktreeState:
 
     data = json.loads(content)
 
+    state.window_id = data.get("window_id")
+    state.overview_workspace_id = data.get("overview_workspace_id")
+
     for wt_data in data.get("worktrees", []):
         entry = WorktreeEntry(
             name=wt_data["name"],
             path=wt_data["path"],
             branch=wt_data["branch"],
             base_branch=wt_data.get("base_branch"),
-            pane_id=wt_data.get("pane_id"),
+            terminal_id=wt_data.get("terminal_id") or wt_data.get("pane_id"),
             status=wt_data.get("status", "active"),
         )
         state.worktrees.append(entry)
@@ -121,9 +128,13 @@ def save_state(project_path: Path, state: WorktreeState) -> None:
     # Ensure worktrees directory exists
     state_file.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {
+    data: dict[str, object] = {
         "worktrees": [wt.to_dict() for wt in state.worktrees],
     }
+    if state.window_id is not None:
+        data["window_id"] = state.window_id
+    if state.overview_workspace_id is not None:
+        data["overview_workspace_id"] = state.overview_workspace_id
 
     # Write atomically via temp file
     temp_file = state_file.with_suffix(".tmp")
@@ -137,7 +148,7 @@ def add_worktree(
     worktree_path: str,
     branch: str,
     base_branch: Optional[str] = None,
-    pane_id: Optional[str] = None,
+    terminal_id: Optional[str] = None,
 ) -> WorktreeState:
     """Add a worktree to the state file."""
     state = load_state(project_path)
@@ -147,7 +158,7 @@ def add_worktree(
         path=worktree_path,
         branch=branch,
         base_branch=base_branch,
-        pane_id=pane_id,
+        terminal_id=terminal_id,
         status="active",
     )
     state.add(entry)
@@ -176,8 +187,8 @@ def cmd_list(project_path: Path) -> None:
     print(f"Worktrees ({len(state.worktrees)}):")
     for wt in state.worktrees:
         flags = []
-        if wt.pane_id is not None:
-            flags.append(f"pane:{wt.pane_id}")
+        if wt.terminal_id is not None:
+            flags.append(f"terminal:{wt.terminal_id}")
         if wt.base_branch:
             flags.append(f"base:{wt.base_branch}")
         flag_str = f" [{', '.join(flags)}]" if flags else ""
@@ -198,7 +209,7 @@ def cmd_show(project_path: Path, name: str) -> None:
     print(f"Branch:       {entry.branch}")
     print(f"Base Branch:  {entry.base_branch or 'N/A'}")
     print(f"Status:       {entry.status}")
-    print(f"Pane ID:      {entry.pane_id or 'N/A'}")
+    print(f"Terminal ID:  {entry.terminal_id or 'N/A'}")
 
 
 def cmd_path(project_path: Path) -> None:
