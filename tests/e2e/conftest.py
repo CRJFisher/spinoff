@@ -7,13 +7,24 @@ from pathlib import Path
 
 import pytest
 
-from spinoff.wezterm import wezterm_available, list_panes, close_tab
+from spinoff.backends import get_backend
+
+
+def _get_backend_or_none():
+    """Try to get a terminal backend, return None if none available."""
+    try:
+        backend = get_backend()
+    except RuntimeError:
+        return None
+    if not backend.available():
+        return None
+    return backend
 
 
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip e2e tests if WezTerm is not running."""
-    if not wezterm_available():
-        skip = pytest.mark.skip(reason="WezTerm not running")
+    """Auto-skip e2e tests if no terminal backend is available."""
+    if _get_backend_or_none() is None:
+        skip = pytest.mark.skip(reason="No terminal backend available")
         for item in items:
             if "e2e" in item.keywords:
                 item.add_marker(skip)
@@ -94,18 +105,19 @@ def test_project_pair(tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def cleanup_wezterm_panes():
-    """Track WezTerm panes before/after test, kill new ones on teardown."""
-    if not wezterm_available():
+def cleanup_terminals():
+    """Track terminal workspaces before/after test, close new ones on teardown."""
+    backend = _get_backend_or_none()
+    if backend is None:
         yield
         return
 
-    before = {str(p.get("pane_id")) for p in list_panes()}
+    before = {w.get("terminal_id", "") for w in backend.list_workspaces()}
     yield
-    after = {str(p.get("pane_id")) for p in list_panes()}
-    new_panes = after - before
-    for pane_id in new_panes:
-        close_tab(pane_id)
+    after = {w.get("terminal_id", "") for w in backend.list_workspaces()}
+    new_workspaces = after - before
+    for terminal_id in new_workspaces:
+        backend.close_workspace(terminal_id)
 
 
 def run_create_worktree(project, task_name, plugin_root, **kwargs):

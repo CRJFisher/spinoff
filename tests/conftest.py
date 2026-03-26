@@ -26,6 +26,7 @@ def tmp_project(tmp_path):
         "build_command": config.build_command,
         "worktree_dir": config.worktree_dir,
         "default_mode": config.default_mode,
+        "terminal_backend": config.terminal_backend,
     }
     config_file.write_text(json.dumps(data, indent=2) + "\n")
     return tmp_path
