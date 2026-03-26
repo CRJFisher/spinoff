@@ -16,6 +16,18 @@ from pathlib import Path
 
 
 @dataclass
+class NotificationConfig:
+    """Notification preferences for the overview panel."""
+    desktop: bool = True
+    flash: bool = True
+    on_done: bool = True
+    on_error: bool = True
+    on_waiting: bool = True
+    cooldown_urgent_secs: int = 30
+    cooldown_info_secs: int = 60
+
+
+@dataclass
 class SpinoffConfig:
     """Per-project spinoff configuration."""
     project_name: str
@@ -24,6 +36,8 @@ class SpinoffConfig:
     worktree_dir: str = ".claude/worktrees"
     default_mode: str = "implement"
     terminal_backend: str = ""
+    notifications: NotificationConfig = field(default_factory=NotificationConfig)
+    overview_poll_interval: float = 0.0  # 0.0 = use adaptive
 
 
 CONFIG_FILENAME = ".claude/spinoff.json"
@@ -55,6 +69,17 @@ def load_config(project_path: Path) -> SpinoffConfig:
 
     data = json.loads(config_file.read_text())
 
+    notif_data = data.get("notifications", {})
+    notifications = NotificationConfig(
+        desktop=notif_data.get("desktop", True),
+        flash=notif_data.get("flash", True),
+        on_done=notif_data.get("on_done", True),
+        on_error=notif_data.get("on_error", True),
+        on_waiting=notif_data.get("on_waiting", True),
+        cooldown_urgent_secs=notif_data.get("cooldown_urgent_secs", 30),
+        cooldown_info_secs=notif_data.get("cooldown_info_secs", 60),
+    )
+
     return SpinoffConfig(
         project_name=data["project_name"],
         state_files=data.get("state_files", []),
@@ -62,6 +87,8 @@ def load_config(project_path: Path) -> SpinoffConfig:
         worktree_dir=data.get("worktree_dir", ".claude/worktrees"),
         default_mode=data.get("default_mode", "implement"),
         terminal_backend=data.get("terminal_backend", ""),
+        notifications=notifications,
+        overview_poll_interval=data.get("overview_poll_interval", 0.0),
     )
 
 
@@ -76,7 +103,25 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
     config_file = project_path / CONFIG_FILENAME
     config_file.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {
+    notif = config.notifications
+    notif_defaults = NotificationConfig()
+    notif_data: dict[str, bool | int] = {}
+    if notif.desktop != notif_defaults.desktop:
+        notif_data["desktop"] = notif.desktop
+    if notif.flash != notif_defaults.flash:
+        notif_data["flash"] = notif.flash
+    if notif.on_done != notif_defaults.on_done:
+        notif_data["on_done"] = notif.on_done
+    if notif.on_error != notif_defaults.on_error:
+        notif_data["on_error"] = notif.on_error
+    if notif.on_waiting != notif_defaults.on_waiting:
+        notif_data["on_waiting"] = notif.on_waiting
+    if notif.cooldown_urgent_secs != notif_defaults.cooldown_urgent_secs:
+        notif_data["cooldown_urgent_secs"] = notif.cooldown_urgent_secs
+    if notif.cooldown_info_secs != notif_defaults.cooldown_info_secs:
+        notif_data["cooldown_info_secs"] = notif.cooldown_info_secs
+
+    data: dict[str, object] = {
         "project_name": config.project_name,
         "state_files": config.state_files,
         "build_command": config.build_command,
@@ -84,6 +129,10 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
         "default_mode": config.default_mode,
         "terminal_backend": config.terminal_backend,
     }
+    if notif_data:
+        data["notifications"] = notif_data
+    if config.overview_poll_interval != 0.0:
+        data["overview_poll_interval"] = config.overview_poll_interval
 
     config_file.write_text(json.dumps(data, indent=2) + "\n")
 

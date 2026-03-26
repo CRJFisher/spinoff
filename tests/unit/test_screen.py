@@ -516,6 +516,29 @@ class TestPollScheduler:
         due = sched.surfaces_due(["s1"])
         assert "s1" in due
 
+    def test_override_interval_passed_to_timing(self) -> None:
+        sched = PollScheduler(override_interval=3.0)
+        timing = sched.get_timing("s1")
+        assert timing.override_interval == 3.0
+        assert timing.interval() == 3.0
+
+
+class TestPollTimingOverride:
+    def test_override_used(self) -> None:
+        t = PollTiming(surface_id="s1", override_interval=5.0)
+        assert t.interval() == 5.0
+
+    def test_override_ignores_state(self) -> None:
+        t = PollTiming(surface_id="s1", override_interval=2.0)
+        t.record(AgentState.WORKING)
+        assert t.interval() == 2.0
+        t.record(AgentState.DONE)
+        assert t.interval() == 2.0
+
+    def test_zero_override_uses_adaptive(self) -> None:
+        t = PollTiming(surface_id="s1", override_interval=0.0, last_state=AgentState.WORKING)
+        assert t.interval() == 1.0
+
 
 # ---------------------------------------------------------------------------
 # Edge cases

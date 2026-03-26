@@ -26,7 +26,7 @@ from pathlib import Path
 from spinoff.backends import get_backend
 from spinoff.config import load_config
 from spinoff.sandbox import claude_available, get_claude_command
-from spinoff.state import add_worktree
+from spinoff.state import DependencyError, add_worktree
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -130,6 +130,11 @@ Examples:
         default=None,
         help="Claude model (e.g. haiku, sonnet, opus)",
     )
+    parser.add_argument(
+        "--depends-on",
+        default=None,
+        help="Comma-separated list of worktree names this task depends on",
+    )
     args = parser.parse_args()
 
     # Validate Claude prerequisite
@@ -225,15 +230,25 @@ Examples:
         print(f"  Warning: {msg}", file=sys.stderr)
         terminal_id = None
 
+    # Parse dependencies
+    depends_on: list[str] | None = None
+    if args.depends_on:
+        depends_on = [d.strip() for d in args.depends_on.split(",") if d.strip()]
+
     # Update state file
-    add_worktree(
-        repo_root,
-        name=safe_name,
-        worktree_path=str(worktree_path.relative_to(repo_root)),
-        branch=branch_name,
-        base_branch=base,
-        terminal_id=terminal_id,
-    )
+    try:
+        add_worktree(
+            repo_root,
+            name=safe_name,
+            worktree_path=str(worktree_path.relative_to(repo_root)),
+            branch=branch_name,
+            base_branch=base,
+            terminal_id=terminal_id,
+            depends_on=depends_on,
+        )
+    except DependencyError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Print summary
     print(f"\nWorktree ready at: {worktree_path}")

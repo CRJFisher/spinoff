@@ -524,6 +524,7 @@ class PollTiming:
     last_poll: float = 0.0
     last_state: AgentState = AgentState.UNKNOWN
     consecutive_same: int = 0
+    override_interval: float = 0.0  # If non-zero, use this instead of adaptive
 
     # Interval bounds in seconds
     MIN_INTERVAL: float = 1.0
@@ -552,6 +553,9 @@ class PollTiming:
         Adaptive: if the state hasn't changed for SLOWDOWN_THRESHOLD polls,
         increase interval toward MAX_INTERVAL.
         """
+        if self.override_interval > 0.0:
+            return self.override_interval
+
         base: float
         match self.last_state:
             case AgentState.WORKING | AgentState.INITIALIZING | AgentState.UNKNOWN:
@@ -588,13 +592,17 @@ class PollTiming:
 class PollScheduler:
     """Manages poll timing across multiple surfaces."""
 
-    def __init__(self) -> None:
+    def __init__(self, override_interval: float = 0.0) -> None:
         self._timings: dict[str, PollTiming] = {}
+        self._override_interval = override_interval
 
     def get_timing(self, surface_id: str) -> PollTiming:
         """Get or create timing state for a surface."""
         if surface_id not in self._timings:
-            self._timings[surface_id] = PollTiming(surface_id=surface_id)
+            self._timings[surface_id] = PollTiming(
+                surface_id=surface_id,
+                override_interval=self._override_interval,
+            )
         return self._timings[surface_id]
 
     def surfaces_due(self, surface_ids: list[str]) -> list[str]:

@@ -5,11 +5,15 @@ import json
 import pytest
 
 from spinoff.state import (
+    DependencyError,
+    OverviewInfo,
     WorktreeEntry,
     WorktreeState,
     get_state_file_path,
     load_state,
     save_state,
+    topological_sort,
+    validate_dependencies,
 )
 
 
@@ -46,6 +50,34 @@ class TestWorktreeEntry:
         assert entry.base_branch is None
         assert entry.terminal_id is None
         assert entry.status == "active"
+        assert entry.depends_on == []
+        assert entry.summary == ""
+        assert entry.last_status == ""
+
+    def test_to_dict_with_depends_on(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b", depends_on=["x", "y"])
+        d = entry.to_dict()
+        assert d["depends_on"] == ["x", "y"]
+
+    def test_to_dict_empty_depends_on_omitted(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b")
+        assert "depends_on" not in entry.to_dict()
+
+    def test_to_dict_with_summary(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b", summary="done stuff")
+        assert entry.to_dict()["summary"] == "done stuff"
+
+    def test_to_dict_empty_summary_omitted(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b")
+        assert "summary" not in entry.to_dict()
+
+    def test_to_dict_with_last_status(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b", last_status="working")
+        assert entry.to_dict()["last_status"] == "working"
+
+    def test_to_dict_empty_last_status_omitted(self):
+        entry = WorktreeEntry(name="a", path="p", branch="b")
+        assert "last_status" not in entry.to_dict()
 
 
 class TestWorktreeState:
@@ -160,20 +192,151 @@ class TestProjectLevelFields:
         loaded = load_state(tmp_path)
         assert loaded.window_id == "cmux-win-uuid"
 
-    def test_overview_workspace_id_roundtrip(self, tmp_path):
-        state = WorktreeState(overview_workspace_id="cmux-overview-uuid")
+    def test_overview_roundtrip(self, tmp_path):
+        info = OverviewInfo(workspace_id="ws-1", surface_id="sf-2", pid=1234)
+        state = WorktreeState(overview=info)
         save_state(tmp_path, state)
         loaded = load_state(tmp_path)
-        assert loaded.overview_workspace_id == "cmux-overview-uuid"
+        assert loaded.overview is not None
+        assert loaded.overview.workspace_id == "ws-1"
+        assert loaded.overview.surface_id == "sf-2"
+        assert loaded.overview.pid == 1234
 
     def test_none_fields_omitted_from_json(self, tmp_path):
         state = WorktreeState()
         save_state(tmp_path, state)
         raw = json.loads(get_state_file_path(tmp_path).read_text())
         assert "window_id" not in raw
-        assert "overview_workspace_id" not in raw
+        assert "overview" not in raw
 
     def test_defaults_are_none(self):
         state = WorktreeState()
         assert state.window_id is None
-        assert state.overview_workspace_id is None
+        assert state.overview is None
+
+
+class TestOverviewInfo:
+    def test_to_dict(self):
+        info = OverviewInfo(workspace_id="ws", surface_id="sf", pid=42)
+        d = info.to_dict()
+        assert d == {"workspace_id": "ws", "surface_id": "sf", "pid": 42}
+
+
+class TestNewFieldsRoundtrip:
+    def test_depends_on_roundtrip(self, tmp_path):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b", depends_on=["x", "y"]),
+        ])
+        save_state(tmp_path, state)
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].depends_on == ["x", "y"]
+
+    def test_summary_roundtrip(self, tmp_path):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b", summary="done stuff"),
+        ])
+        save_state(tmp_path, state)
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].summary == "done stuff"
+
+    def test_last_status_roundtrip(self, tmp_path):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b", last_status="working"),
+        ])
+        save_state(tmp_path, state)
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].last_status == "working"
+
+    def test_backward_compat_no_new_fields(self, tmp_path):
+        """Old state files without new fields load with defaults."""
+        state_file = get_state_file_path(tmp_path)
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(json.dumps({
+            "worktrees": [{"name": "old", "path": "p", "branch": "b"}]
+        }))
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].depends_on == []
+        assert loaded.worktrees[0].summary == ""
+        assert loaded.worktrees[0].last_status == ""
+
+
+class TestDependencyValidation:
+    def test_valid_deps(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b"),
+        ])
+        validate_dependencies(state, "c", ["a", "b"])  # Should not raise
+
+    def test_missing_dep(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+        ])
+        with pytest.raises(DependencyError, match="not found"):
+            validate_dependencies(state, "c", ["a", "missing"])
+
+    def test_self_dep(self):
+        state = WorktreeState(worktrees=[])
+        with pytest.raises(DependencyError, match="itself"):
+            validate_dependencies(state, "a", ["a"])
+
+    def test_direct_cycle(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b", depends_on=["b"]),
+            WorktreeEntry(name="b", path="p", branch="b"),
+        ])
+        with pytest.raises(DependencyError, match="cycle"):
+            validate_dependencies(state, "b", ["a"])
+
+    def test_indirect_cycle(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b", depends_on=["c"]),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b"),
+        ])
+        with pytest.raises(DependencyError, match="cycle"):
+            validate_dependencies(state, "c", ["b"])
+
+    def test_diamond_no_cycle(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["a"]),
+        ])
+        validate_dependencies(state, "d", ["b", "c"])  # Should not raise
+
+
+class TestTopologicalSort:
+    def test_no_deps(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b"),
+        ])
+        layers = topological_sort(state)
+        assert len(layers) == 1
+        assert sorted(layers[0]) == ["a", "b"]
+
+    def test_linear_chain(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["b"]),
+        ])
+        layers = topological_sort(state)
+        assert layers == [["a"], ["b"], ["c"]]
+
+    def test_diamond(self):
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="d", path="p", branch="b", depends_on=["b", "c"]),
+        ])
+        layers = topological_sort(state)
+        assert layers[0] == ["a"]
+        assert sorted(layers[1]) == ["b", "c"]
+        assert layers[2] == ["d"]
+
+    def test_empty(self):
+        state = WorktreeState()
+        assert topological_sort(state) == []

@@ -1,15 +1,14 @@
 """Shared test fixtures for spinoff tests."""
 
-import json
 from pathlib import Path
 
 import pytest
 
-from spinoff.config import SpinoffConfig, CONFIG_FILENAME
+from spinoff.config import SpinoffConfig, save_config
 
 
 @pytest.fixture
-def tmp_project(tmp_path):
+def tmp_project(tmp_path: Path) -> Path:
     """Create a minimal project directory with spinoff config."""
     config = SpinoffConfig(
         project_name="test-project",
@@ -18,15 +17,5 @@ def tmp_project(tmp_path):
         worktree_dir=".claude/worktrees",
         default_mode="implement",
     )
-    config_file = tmp_path / CONFIG_FILENAME
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "project_name": config.project_name,
-        "state_files": config.state_files,
-        "build_command": config.build_command,
-        "worktree_dir": config.worktree_dir,
-        "default_mode": config.default_mode,
-        "terminal_backend": config.terminal_backend,
-    }
-    config_file.write_text(json.dumps(data, indent=2) + "\n")
+    save_config(tmp_path, config)
     return tmp_path

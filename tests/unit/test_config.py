@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from spinoff.config import SpinoffConfig, load_config, save_config, CONFIG_FILENAME
+from spinoff.config import NotificationConfig, SpinoffConfig, load_config, save_config, CONFIG_FILENAME
 
 
 class TestDefaults:
@@ -90,3 +90,62 @@ class TestLoadConfig:
         with pytest.raises(SystemExit) as exc_info:
             load_config(tmp_path)
         assert exc_info.value.code == 1
+
+
+class TestNotificationConfig:
+    def test_defaults(self):
+        nc = NotificationConfig()
+        assert nc.desktop is True
+        assert nc.flash is True
+        assert nc.on_done is True
+        assert nc.cooldown_urgent_secs == 30
+        assert nc.cooldown_info_secs == 60
+
+    def test_spinoff_config_default_notifications(self):
+        config = SpinoffConfig(project_name="test")
+        assert config.notifications.desktop is True
+        assert config.overview_poll_interval == 0.0
+
+    def test_load_missing_notifications(self, tmp_path):
+        config_file = tmp_path / CONFIG_FILENAME
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(json.dumps({"project_name": "old"}))
+        loaded = load_config(tmp_path)
+        assert loaded.notifications.desktop is True
+        assert loaded.overview_poll_interval == 0.0
+
+    def test_load_partial_notifications(self, tmp_path):
+        config_file = tmp_path / CONFIG_FILENAME
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(json.dumps({
+            "project_name": "p",
+            "notifications": {"desktop": False, "cooldown_urgent_secs": 10},
+        }))
+        loaded = load_config(tmp_path)
+        assert loaded.notifications.desktop is False
+        assert loaded.notifications.cooldown_urgent_secs == 10
+        assert loaded.notifications.flash is True  # default
+
+    def test_roundtrip_with_notifications(self, tmp_path):
+        nc = NotificationConfig(desktop=False, cooldown_urgent_secs=15)
+        original = SpinoffConfig(project_name="app", notifications=nc, overview_poll_interval=3.0)
+        save_config(tmp_path, original)
+        loaded = load_config(tmp_path)
+        assert loaded.notifications.desktop is False
+        assert loaded.notifications.cooldown_urgent_secs == 15
+        assert loaded.notifications.flash is True
+        assert loaded.overview_poll_interval == 3.0
+
+    def test_save_omits_default_notifications(self, tmp_path):
+        config = SpinoffConfig(project_name="clean")
+        save_config(tmp_path, config)
+        data = json.loads((tmp_path / CONFIG_FILENAME).read_text())
+        assert "notifications" not in data
+        assert "overview_poll_interval" not in data
+
+    def test_save_includes_non_default(self, tmp_path):
+        nc = NotificationConfig(desktop=False)
+        config = SpinoffConfig(project_name="x", notifications=nc)
+        save_config(tmp_path, config)
+        data = json.loads((tmp_path / CONFIG_FILENAME).read_text())
+        assert data["notifications"] == {"desktop": False}
