@@ -5,6 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from spinoff.overview import close_overview, cmd_approve, cmd_status, open_overview
+from spinoff.overview.poller import watch
+
 
 def main() -> None:
     try:
@@ -47,14 +50,11 @@ Examples:
 
     args = parser.parse_args()
 
-    from spinoff.overview import close_overview, cmd_approve, cmd_status, open_overview
-
     if args.command == "status":
         cmd_status(args.project)
     elif args.command == "approve":
         cmd_approve(args.project, args.name)
     elif args.command == "watch":
-        from spinoff.overview.poller import watch
         watch(args.project)
     elif args.close:
         ok, msg = close_overview(args.project)

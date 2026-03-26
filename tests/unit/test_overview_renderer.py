@@ -1,5 +1,7 @@
 """Tests for spinoff.overview.renderer."""
 
+import re
+
 from spinoff.screen import AgentState
 from spinoff.overview.renderer import (
     AgentSnapshot,
@@ -62,8 +64,8 @@ class TestHTMLGeneration:
 
     def test_working_has_no_approve_button(self) -> None:
         html = render_overview(_data([_snap("a", AgentState.WORKING)]))
-        # Approve button should not appear in the table row (only in CSS as class def)
-        assert 'onclick="doAction(\'approve\'' not in html
+        # Approve action button should not appear for WORKING state
+        assert 'data-action="approve"' not in html
 
     def test_errored_has_badge_class(self) -> None:
         html = render_overview(_data([_snap("a", AgentState.ERRORED)]))
@@ -89,8 +91,6 @@ class TestSnippetRendering:
         agents = [_snap("a", AgentState.WORKING, snippet=long_snippet)]
         html = render_overview(_data(agents))
         # The cell content truncates to 80 chars, but title attr has full text
-        # Check that the cell text (between > and </td>) is truncated
-        import re
         cell_match = re.search(r'class="snippet"[^>]*>([^<]+)</td>', html)
         assert cell_match is not None
         assert len(cell_match.group(1)) <= 80

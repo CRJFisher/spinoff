@@ -14,7 +14,7 @@ _SECRET_TOKEN_RE = re.compile(
 )
 
 _SECRET_KV_RE = re.compile(
-    r"(password|secret|key|token)(\s*[=:]\s*)\S+",
+    r"\b(password|secret|key|token)(\s*[=:]\s*)\S+",
     re.IGNORECASE,
 )
 
@@ -37,8 +37,8 @@ def redact_secrets(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 _DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"git\s+push\s+.*(-f|--force)\b"), "git force push"),
-    (re.compile(r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+/"), "recursive delete at root"),
+    (re.compile(r"git\s+push\s+.*--force(?!-with-lease)\b|git\s+push\s+.*-[a-zA-Z]*f\b"), "git force push"),
+    (re.compile(r"rm\s+-(?=[a-zA-Z]*[rR])(?=[a-zA-Z]*[fF])[a-zA-Z]+\s+/"), "recursive delete at root"),
     (re.compile(r"\bsudo\b"), "privilege elevation (sudo)"),
     (re.compile(r"\bsu\s+-"), "privilege elevation (su)"),
     (re.compile(r"\bdoas\b"), "privilege elevation (doas)"),

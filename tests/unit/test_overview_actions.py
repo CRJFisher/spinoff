@@ -2,6 +2,7 @@
 
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -38,9 +39,8 @@ def config() -> SpinoffConfig:
 
 
 class TestReadAction:
-    def test_reads_valid_json(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "action.json"
+    def test_reads_valid_json(self, tmp_path: Path) -> None:
+        p = tmp_path / "action.json"
         p.write_text(json.dumps({
             "action": "approve", "surface_id": "s1", "timestamp": time.time(),
         }))
@@ -49,20 +49,17 @@ class TestReadAction:
         assert req.action == "approve"
         assert req.surface_id == "s1"
 
-    def test_returns_none_for_missing_file(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "missing.json"
+    def test_returns_none_for_missing_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "missing.json"
         assert read_action(p) is None
 
-    def test_returns_none_for_invalid_json(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "bad.json"
+    def test_returns_none_for_invalid_json(self, tmp_path: Path) -> None:
+        p = tmp_path / "bad.json"
         p.write_text("not json{")
         assert read_action(p) is None
 
-    def test_returns_none_for_missing_fields(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "partial.json"
+    def test_returns_none_for_missing_fields(self, tmp_path: Path) -> None:
+        p = tmp_path / "partial.json"
         p.write_text(json.dumps({"action": "approve"}))
         assert read_action(p) is None
 
@@ -98,75 +95,71 @@ class TestValidateAction:
 
 
 class TestConsumeAction:
-    def test_deletes_file(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "action.json"
+    def test_deletes_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "action.json"
         p.write_text("{}")
         consume_action(p)
         assert not p.exists()
 
-    def test_idempotent_on_missing(self, tmp_path: object) -> None:
-        from pathlib import Path
-        p = Path(str(tmp_path)) / "missing.json"
+    def test_idempotent_on_missing(self, tmp_path: Path) -> None:
+        p = tmp_path / "missing.json"
         consume_action(p)  # Should not raise
 
 
 class TestDispatchAction:
-    def test_focus_calls_focus_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
+    def test_focus_calls_focus_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
         req = ActionRequest("focus", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        result = dispatch_action(req, spy, state_with_agents)
         assert result.success
         calls = spy.get_calls("focus_workspace")
         assert len(calls) == 1
         assert calls[0].args == ("s1",)
 
-    def test_approve_with_safe_screen(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
-        spy.set_current_screen("s1", "Do you want to proceed?\n> Yes\n  No\n")
+    def test_approve_with_safe_screen(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+        spy.set_current_screen("s1", "Do you want to proceed?\n❯ Yes\n  No\n")
         req = ActionRequest("approve", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        result = dispatch_action(req, spy, state_with_agents)
         assert result.success
         send_calls = spy.get_calls("send_keys")
         assert len(send_calls) == 2
         assert send_calls[0].args == ("s1", "y")
         assert send_calls[1].args == ("s1", "enter")
 
-    def test_approve_blocked_by_safety(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
-        spy.set_current_screen("s1", "git push --force origin main\n> Yes\n")
+    def test_approve_blocked_by_safety(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+        spy.set_current_screen("s1", "git push --force origin main\n❯ Yes\n  No\n")
         req = ActionRequest("approve", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        result = dispatch_action(req, spy, state_with_agents)
         assert not result.success
         assert "Blocked" in result.message
 
-    def test_reject_sends_n(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
+    def test_reject_sends_n(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
         req = ActionRequest("reject", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        result = dispatch_action(req, spy, state_with_agents)
         assert result.success
         send_calls = spy.get_calls("send_keys")
         assert send_calls[0].args == ("s1", "n")
 
-    def test_interrupt_sends_ctrl_c(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
+    def test_interrupt_sends_ctrl_c(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
         req = ActionRequest("interrupt", "s1", time.time())
-        dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        dispatch_action(req, spy, state_with_agents)
         send_calls = spy.get_calls("send_keys")
         assert send_calls[0].args == ("s1", "ctrl-c")
 
-    def test_kill_closes_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
+    def test_kill_closes_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
         req = ActionRequest("kill", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents, None, config)  # type: ignore[arg-type]
+        result = dispatch_action(req, spy, state_with_agents)
         assert result.success
         assert len(spy.get_calls("close_workspace")) == 1
 
 
 class TestPollAndDispatch:
-    def test_no_action_returns_none(self, tmp_path: object, spy: SpyBackend, state_with_agents: WorktreeState, config: SpinoffConfig) -> None:
-        from pathlib import Path
+    def test_no_action_returns_none(self, tmp_path: Path, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
         config_copy = SpinoffConfig(project_name="test", worktree_dir=str(tmp_path))
-        result = poll_and_dispatch_action(Path(str(tmp_path)), config_copy, spy, state_with_agents)
+        result = poll_and_dispatch_action(tmp_path, config_copy, spy, state_with_agents)
         assert result is None
 
-    def test_valid_action_dispatched_and_file_consumed(self, tmp_path: object, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
-        from pathlib import Path
-        project = Path(str(tmp_path))
+    def test_valid_action_dispatched_and_file_consumed(self, tmp_path: Path, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+        project = tmp_path
         wt_dir = project / ".claude" / "worktrees"
         wt_dir.mkdir(parents=True, exist_ok=True)
         actions_file = wt_dir / ".overview-actions.json"

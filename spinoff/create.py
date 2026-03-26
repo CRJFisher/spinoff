@@ -176,6 +176,19 @@ Examples:
         print(f"Error: {worktree_path} already exists", file=sys.stderr)
         sys.exit(1)
 
+    # Parse and validate dependencies early (before creating resources)
+    depends_on: list[str] | None = None
+    if args.depends_on:
+        depends_on = [d.strip() for d in args.depends_on.split(",") if d.strip()] or None
+    if depends_on:
+        from spinoff.state import load_state, validate_dependencies
+        try:
+            state = load_state(repo_root)
+            validate_dependencies(state, safe_name, depends_on)
+        except DependencyError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
     # Get base branch
     base = args.base or subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -230,25 +243,16 @@ Examples:
         print(f"  Warning: {msg}", file=sys.stderr)
         terminal_id = None
 
-    # Parse dependencies
-    depends_on: list[str] | None = None
-    if args.depends_on:
-        depends_on = [d.strip() for d in args.depends_on.split(",") if d.strip()]
-
     # Update state file
-    try:
-        add_worktree(
-            repo_root,
-            name=safe_name,
-            worktree_path=str(worktree_path.relative_to(repo_root)),
-            branch=branch_name,
-            base_branch=base,
-            terminal_id=terminal_id,
-            depends_on=depends_on,
-        )
-    except DependencyError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    add_worktree(
+        repo_root,
+        name=safe_name,
+        worktree_path=str(worktree_path.relative_to(repo_root)),
+        branch=branch_name,
+        base_branch=base,
+        terminal_id=terminal_id,
+        depends_on=depends_on,
+    )
 
     # Print summary
     print(f"\nWorktree ready at: {worktree_path}")

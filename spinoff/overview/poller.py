@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import signal
+import sys
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -91,11 +92,15 @@ class OverviewPoller:
                 logger.exception("Error in poll cycle")
                 self._log_event("cycle_error", error=traceback.format_exc()[:500])
 
-            sleep_time = self._compute_sleep()
+            try:
+                sleep_time = self._compute_sleep()
+            except Exception:
+                sleep_time = 1.0
             deadline = time.monotonic() + sleep_time
             while time.monotonic() < deadline and not self._shutdown_requested:
                 time.sleep(min(0.25, deadline - time.monotonic()))
 
+        self._flush_done_batch(force=True)
         self._log_event("poller_stopped")
         logger.info("Overview poller stopped")
 
@@ -121,10 +126,12 @@ class OverviewPoller:
         active_names = {a.name for a in agents}
         for name in list(self._snapshots):
             if name not in active_names:
-                del self._snapshots[name]
+                snap = self._snapshots.pop(name)
                 self._previous_states.pop(name, None)
                 self._state_entered_at.pop(name, None)
                 self._cooldowns.pop(name, None)
+                if snap.surface_id:
+                    self._scheduler.remove(snap.surface_id)
 
         # Read + classify due agents
         state_changed = False
@@ -132,11 +139,12 @@ class OverviewPoller:
             if not entry.terminal_id or entry.terminal_id not in due:
                 continue
 
+            prev_state = self._previous_states.get(entry.name, AgentState.UNKNOWN)
             snapshot = self._read_and_classify(entry)
             if snapshot is not None:
                 self._scheduler.record(entry.terminal_id, snapshot.phase)
                 self._update_sidebar(snapshot)
-                self._dispatch_notification(snapshot)
+                self._dispatch_notification(snapshot, prev_state)
 
                 # Update last_status in state
                 if entry.last_status != snapshot.phase.value:
@@ -236,16 +244,17 @@ class OverviewPoller:
 
         self._backend.set_sidebar_status(snapshot.surface_id or "", status_text)
 
-        if snapshot.phase in (AgentState.WORKING, AgentState.INITIALIZING):
-            self._backend.set_sidebar_progress(snapshot.surface_id or "", -1)
-        elif snapshot.phase in (AgentState.DONE, AgentState.SHELL):
-            self._backend.set_sidebar_progress(snapshot.surface_id or "", 100)
+        sid = snapshot.surface_id or ""
+        if snapshot.phase in (AgentState.WORKING, AgentState.INITIALIZING, AgentState.WAITING_APPROVAL):
+            self._backend.set_sidebar_progress(sid, -1)
+        elif snapshot.phase in (AgentState.DONE, AgentState.SHELL, AgentState.ERRORED):
+            self._backend.set_sidebar_progress(sid, 100)
+        else:
+            self._backend.set_sidebar_progress(sid, 0)
 
-    def _dispatch_notification(self, snapshot: AgentSnapshot) -> None:
+    def _dispatch_notification(self, snapshot: AgentSnapshot, prev_state: AgentState) -> None:
         """Send desktop notification on state transitions."""
-        prev = self._previous_states.get(snapshot.worktree_name)
-        # Only notify on actual transitions (track_state already updated)
-        if prev == snapshot.phase:
+        if prev_state == snapshot.phase:
             return
 
         now = time.monotonic()
@@ -394,7 +403,6 @@ def watch(project_path: Path) -> None:
 
     if not backend.available():
         logger.error("Terminal backend not available")
-        import sys
         sys.exit(1)
 
     poller = OverviewPoller(project_path, config, backend)

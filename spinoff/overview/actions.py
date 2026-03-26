@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from spinoff.config import SpinoffConfig
-from spinoff.screen import AgentState, ScreenSnapshot, classify, strip_ansi
-from spinoff.state import WorktreeState, save_state
+from spinoff.screen import AgentState, ScreenSnapshot, classify
+from spinoff.state import WorktreeState
 from spinoff.terminal import TerminalBackend
 
 from spinoff.overview.security import is_safe_to_approve
@@ -88,8 +88,6 @@ def dispatch_action(
     request: ActionRequest,
     backend: TerminalBackend,
     state: WorktreeState,
-    project_path: Path,
-    config: SpinoffConfig,
 ) -> ActionResult:
     """Execute a validated action."""
     action = request.action
@@ -118,14 +116,22 @@ def dispatch_action(
     if action == "approve_all":
         return _execute_approve_all(backend, state)
 
-    return ActionResult(False, action, sid, f"Unhandled action: {action}")
+    return ActionResult(False, action, sid, f"Unknown action: {action}")
 
 
 def _execute_approve(surface_id: str, backend: TerminalBackend) -> ActionResult:
-    """Approve a single agent's permission prompt with safety check."""
+    """Approve a single agent's permission prompt with state + safety check."""
     screen_text = backend.read_screen(surface_id)
     if screen_text is None:
         return ActionResult(False, "approve", surface_id, "Surface unreachable")
+
+    # Verify agent is actually at a permission prompt
+    snap = ScreenSnapshot(
+        surface_id=surface_id, text=screen_text, captured_at=time.monotonic(),
+    )
+    status = classify(snap)
+    if status.state != AgentState.WAITING_APPROVAL:
+        return ActionResult(False, "approve", surface_id, f"Not waiting for approval (state: {status.state.value})")
 
     safe, reason = is_safe_to_approve(screen_text)
     if not safe:
@@ -201,6 +207,6 @@ def poll_and_dispatch_action(
     try:
         if not ok:
             return ActionResult(False, request.action, request.surface_id, reason)
-        return dispatch_action(request, backend, state, project_path, config)
+        return dispatch_action(request, backend, state)
     finally:
         consume_action(actions_path)

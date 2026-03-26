@@ -127,19 +127,26 @@ $table_content
 </main>
 $overlaps_section
 <script>
-var ACTIONS_PATH = '$actions_file_path';
-function doAction(action, surfaceId) {
-    writeAction(action, surfaceId);
-    var row = document.querySelector('[data-sid="' + surfaceId + '"]');
+var ACTIONS_PATH = $actions_file_path;
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var sid = btn.dataset.sid || '';
+    if (action === 'kill') {
+        var name = btn.dataset.name || sid;
+        if (!confirm('Kill agent "' + name + '"?')) return;
+    }
+    writeAction(action, sid);
+    var row = btn.closest('tr');
     if (row) { row.style.opacity = '0.6'; setTimeout(function() { row.style.opacity = '1'; }, 1000); }
-}
-function confirmKill(surfaceId, name) {
-    if (confirm('Kill agent "' + name + '"?')) doAction('kill', surfaceId);
-}
-function approveAll() {
-    if (confirm('Approve all waiting agents? Dangerous prompts will be skipped.'))
-        writeAction('approve_all', '');
-}
+});
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.btn-approve-all')) {
+        if (confirm('Approve all waiting agents? Dangerous prompts will be skipped.'))
+            writeAction('approve_all', '');
+    }
+});
 function writeAction(action, surfaceId) {
     var payload = JSON.stringify({action: action, surface_id: surfaceId, timestamp: Date.now()/1000});
     if (typeof window.__cmux_write !== 'undefined') {

@@ -139,11 +139,16 @@ def propagate_recovery(state: WorktreeState, recovered_name: str) -> list[str]:
     }
     active_or_done.add(recovered_name)
 
-    for wt in state.worktrees:
-        if wt.status != "paused":
-            continue
-        if all(dep in active_or_done for dep in wt.depends_on):
-            wt.status = "active"
-            resumed.append(wt.name)
+    changed = True
+    while changed:
+        changed = False
+        for wt in state.worktrees:
+            if wt.status != "paused":
+                continue
+            if all(dep in active_or_done for dep in wt.depends_on):
+                wt.status = "active"
+                resumed.append(wt.name)
+                active_or_done.add(wt.name)
+                changed = True
 
     return resumed

@@ -143,11 +143,14 @@ def load_state(project_path: Path) -> WorktreeState:
 
     overview_data = data.get("overview")
     if overview_data is not None and isinstance(overview_data, dict):
-        state.overview = OverviewInfo(
-            workspace_id=overview_data["workspace_id"],
-            surface_id=overview_data["surface_id"],
-            pid=overview_data["pid"],
-        )
+        try:
+            state.overview = OverviewInfo(
+                workspace_id=overview_data["workspace_id"],
+                surface_id=overview_data["surface_id"],
+                pid=overview_data["pid"],
+            )
+        except KeyError:
+            pass  # Incomplete overview data, ignore
 
     for wt_data in data.get("worktrees", []):
         entry = WorktreeEntry(
@@ -276,11 +279,6 @@ def topological_sort(state: WorktreeState) -> list[list[str]]:
 
     Each layer contains worktrees whose dependencies are all in earlier layers.
     """
-    graph: dict[str, list[str]] = {}
-    for wt in state.worktrees:
-        graph[wt.name] = [d for d in wt.depends_on if d in graph or any(w.name == d for w in state.worktrees)]
-
-    # Rebuild with only known nodes
     all_names = {wt.name for wt in state.worktrees}
     graph = {wt.name: [d for d in wt.depends_on if d in all_names] for wt in state.worktrees}
 

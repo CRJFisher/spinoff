@@ -7,14 +7,13 @@ notifications, and generates an HTML dashboard.
 """
 
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from spinoff.backends import get_backend
 from spinoff.config import load_config
+from spinoff.overview.security import is_safe_to_approve
 from spinoff.screen import AgentState, ScreenSnapshot, classify
 from spinoff.state import OverviewInfo, WorktreeState, load_state, save_state
 
@@ -61,7 +60,7 @@ def open_overview(project_path: Path) -> tuple[bool, str]:
     state.overview = OverviewInfo(
         workspace_id=workspace_id,
         surface_id=workspace_id,  # cmux uses same ID
-        pid=os.getpid(),
+        pid=0,  # Poller writes its own PID after startup
     )
     save_state(project_path, state)
 
@@ -129,8 +128,6 @@ def cmd_status(project_path: Path) -> None:
 
 def cmd_approve(project_path: Path, name: str) -> None:
     """Approve a pending permission prompt for a named agent."""
-    from spinoff.overview.security import is_safe_to_approve
-
     config = load_config(project_path)
     state = load_state(project_path)
     entry = state.find(name)

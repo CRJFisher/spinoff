@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 from spinoff.screen import AgentState
 
+import json
+
 from spinoff.overview.security import safe_html
 from spinoff.overview.template import TEMPLATE
 
@@ -67,7 +69,7 @@ def render_overview(data: OverviewData) -> str:
         generated_at=safe_html(data.generated_at),
         table_content=table_content,
         overlaps_section=overlaps_section,
-        actions_file_path=safe_html(data.actions_file_path),
+        actions_file_path=json.dumps(data.actions_file_path),
     )
 
 
@@ -109,12 +111,12 @@ def _build_table(agents: list[AgentSnapshot]) -> str:
 
         actions: list[str] = []
         if a.surface_id:
-            actions.append(f'<button class="btn" onclick="doAction(\'focus\',\'{sid}\')">Focus</button>')
+            actions.append(f'<button class="btn" data-action="focus" data-sid="{sid}">Focus</button>')
             if a.phase == AgentState.WAITING_APPROVAL:
-                actions.append(f'<button class="btn btn-approve" onclick="doAction(\'approve\',\'{sid}\')">Approve</button>')
-                actions.append(f'<button class="btn" onclick="doAction(\'reject\',\'{sid}\')">Reject</button>')
-            actions.append(f'<button class="btn" onclick="doAction(\'interrupt\',\'{sid}\')">Interrupt</button>')
-            actions.append(f'<button class="btn btn-kill" onclick="confirmKill(\'{sid}\',\'{name}\')">Kill</button>')
+                actions.append(f'<button class="btn btn-approve" data-action="approve" data-sid="{sid}">Approve</button>')
+                actions.append(f'<button class="btn" data-action="reject" data-sid="{sid}">Reject</button>')
+            actions.append(f'<button class="btn" data-action="interrupt" data-sid="{sid}">Interrupt</button>')
+            actions.append(f'<button class="btn btn-kill" data-action="kill" data-sid="{sid}" data-name="{name}">Kill</button>')
 
         rows.append(
             f'<tr data-sid="{sid}">'
