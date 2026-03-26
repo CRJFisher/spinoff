@@ -23,7 +23,7 @@ class TestMultiProject:
         config_b = json.loads((project_b / ".claude" / "spinoff.json").read_text())
 
         workspaces_before = backend.list_workspaces()
-        ids_before = {w.get("terminal_id", w.get("id", "")) for w in workspaces_before}
+        ids_before = {w.get("terminal_id", "") for w in workspaces_before}
 
         # Create worktree in each project
         r1 = run_create_worktree(project_a, "task-a", plugin_root)
@@ -34,7 +34,7 @@ class TestMultiProject:
         # Get new workspaces
         workspaces_after = backend.list_workspaces()
         new_workspaces = [w for w in workspaces_after
-                         if w.get("terminal_id", w.get("id", "")) not in ids_before]
+                         if w.get("terminal_id", "") not in ids_before]
 
         # Exactly 2 new workspaces created
         assert len(new_workspaces) == 2, (

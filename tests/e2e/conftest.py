@@ -112,9 +112,9 @@ def cleanup_terminals():
         yield
         return
 
-    before = {w.get("terminal_id", w.get("id", "")) for w in backend.list_workspaces()}
+    before = {w.get("terminal_id", "") for w in backend.list_workspaces()}
     yield
-    after = {w.get("terminal_id", w.get("id", "")) for w in backend.list_workspaces()}
+    after = {w.get("terminal_id", "") for w in backend.list_workspaces()}
     new_workspaces = after - before
     for terminal_id in new_workspaces:
         backend.close_workspace(terminal_id)

@@ -75,14 +75,17 @@ class TestFocusWorkspace:
 
 class TestListWorkspaces:
     @patch("spinoff.backends.cmux.subprocess.run")
-    def test_returns_workspaces(self, mock_run: MagicMock) -> None:
-        workspaces = [
-            {"id": "ws-1", "title": "fix-auth"},
-            {"id": "ws-2", "title": "overview"},
+    def test_returns_normalized_workspaces(self, mock_run: MagicMock) -> None:
+        raw_workspaces = [
+            {"id": "ws-1", "title": "fix-auth", "selected": True, "current_directory": "/tmp"},
+            {"id": "ws-2", "title": "overview", "selected": False, "current_directory": "/home"},
         ]
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(workspaces))
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(raw_workspaces))
         result = CmuxBackend().list_workspaces()
-        assert result == workspaces
+        assert len(result) == 2
+        assert result[0]["terminal_id"] == "ws-1"
+        assert result[0]["title"] == "fix-auth"
+        assert result[1]["terminal_id"] == "ws-2"
 
     @patch("spinoff.backends.cmux.subprocess.run")
     def test_empty_on_failure(self, mock_run: MagicMock) -> None:
@@ -98,14 +101,14 @@ class TestListWorkspaces:
 class TestWorkspaceExists:
     @patch("spinoff.backends.cmux.subprocess.run")
     def test_exists(self, mock_run: MagicMock) -> None:
-        workspaces = [{"id": "ws-1"}, {"id": "ws-2"}]
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(workspaces))
+        raw = [{"id": "ws-1", "title": "a"}, {"id": "ws-2", "title": "b"}]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(raw))
         assert CmuxBackend().workspace_exists("ws-1") is True
 
     @patch("spinoff.backends.cmux.subprocess.run")
     def test_not_exists(self, mock_run: MagicMock) -> None:
-        workspaces = [{"id": "ws-2"}]
-        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(workspaces))
+        raw = [{"id": "ws-2", "title": "b"}]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(raw))
         assert CmuxBackend().workspace_exists("ws-99") is False
 
 

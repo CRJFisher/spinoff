@@ -35,9 +35,9 @@ class WezTermBackend:
     def create_workspace(
         self,
         title: str,
-        cwd: Path | None = None,
-        command: list[str] | None = None,
-        project_name: str | None = None,
+        cwd: Path | None,
+        command: list[str] | None,
+        project_name: str | None,
     ) -> tuple[bool, str | None, str]:
         """Create a new WezTerm tab with optional command.
 
@@ -210,13 +210,13 @@ class WezTermBackend:
         return False, "Not supported by WezTerm backend"
 
     def set_sidebar_status(
-        self, workspace_id: str, status: str,
+        self, terminal_id: str, status: str,
     ) -> tuple[bool, str]:
         """Not supported by WezTerm backend."""
         return False, "Not supported by WezTerm backend"
 
     def set_sidebar_progress(
-        self, workspace_id: str, progress: int,
+        self, terminal_id: str, progress: int,
     ) -> tuple[bool, str]:
         """Not supported by WezTerm backend."""
         return False, "Not supported by WezTerm backend"

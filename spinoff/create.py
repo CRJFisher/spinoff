@@ -148,7 +148,11 @@ Examples:
     config = load_config(repo_root)
 
     # Get terminal backend
-    backend = get_backend(config)
+    try:
+        backend = get_backend(config)
+    except (RuntimeError, ValueError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     if not backend.available():
         print("Error: No terminal backend available", file=sys.stderr)
         sys.exit(1)

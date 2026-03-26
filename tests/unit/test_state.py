@@ -123,3 +123,57 @@ class TestFileIO:
         save_state(tmp_path, state)
         assert (tmp_path / ".claude" / "worktrees").is_dir()
         assert get_state_file_path(tmp_path).exists()
+
+    def test_legacy_pane_id_fallback(self, tmp_path):
+        """Loading a state file with old pane_id key populates terminal_id."""
+        state_file = get_state_file_path(tmp_path)
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        legacy_data = {
+            "worktrees": [{
+                "name": "old-wt", "path": "p", "branch": "b",
+                "pane_id": "77", "status": "active",
+            }]
+        }
+        state_file.write_text(json.dumps(legacy_data))
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].terminal_id == "77"
+
+    def test_terminal_id_takes_precedence_over_pane_id(self, tmp_path):
+        """When both keys exist, terminal_id wins."""
+        state_file = get_state_file_path(tmp_path)
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "worktrees": [{
+                "name": "wt", "path": "p", "branch": "b",
+                "terminal_id": "new-99", "pane_id": "old-77",
+            }]
+        }
+        state_file.write_text(json.dumps(data))
+        loaded = load_state(tmp_path)
+        assert loaded.worktrees[0].terminal_id == "new-99"
+
+
+class TestProjectLevelFields:
+    def test_window_id_roundtrip(self, tmp_path):
+        state = WorktreeState(window_id="cmux-win-uuid")
+        save_state(tmp_path, state)
+        loaded = load_state(tmp_path)
+        assert loaded.window_id == "cmux-win-uuid"
+
+    def test_overview_workspace_id_roundtrip(self, tmp_path):
+        state = WorktreeState(overview_workspace_id="cmux-overview-uuid")
+        save_state(tmp_path, state)
+        loaded = load_state(tmp_path)
+        assert loaded.overview_workspace_id == "cmux-overview-uuid"
+
+    def test_none_fields_omitted_from_json(self, tmp_path):
+        state = WorktreeState()
+        save_state(tmp_path, state)
+        raw = json.loads(get_state_file_path(tmp_path).read_text())
+        assert "window_id" not in raw
+        assert "overview_workspace_id" not in raw
+
+    def test_defaults_are_none(self):
+        state = WorktreeState()
+        assert state.window_id is None
+        assert state.overview_workspace_id is None

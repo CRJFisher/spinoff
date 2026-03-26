@@ -93,13 +93,13 @@ class TerminalBackend(Protocol):
         ...
 
     def set_sidebar_status(
-        self, workspace_id: str, status: str,
+        self, terminal_id: str, status: str,
     ) -> tuple[bool, str]:
         """Update the sidebar status indicator for a workspace."""
         ...
 
     def set_sidebar_progress(
-        self, workspace_id: str, progress: int,
+        self, terminal_id: str, progress: int,
     ) -> tuple[bool, str]:
         """Update the sidebar progress indicator for a workspace."""
         ...

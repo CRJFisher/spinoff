@@ -131,7 +131,7 @@ class CmuxBackend:
     def workspace_exists(self, terminal_id: str) -> bool:
         """Check if a workspace with the given ID exists."""
         workspaces = self.list_workspaces()
-        return any(ws.get("id") == terminal_id for ws in workspaces)
+        return any(ws.get("terminal_id") == terminal_id for ws in workspaces)
 
     def set_title(self, terminal_id: str, title: str) -> tuple[bool, str]:
         """Set the sidebar title of a cmux workspace."""
@@ -150,7 +150,7 @@ class CmuxBackend:
         return True, f"Focused workspace {terminal_id}"
 
     def list_workspaces(self) -> list[dict[str, str]]:
-        """List all cmux workspaces in the current window."""
+        """List all cmux workspaces in the current window, normalized."""
         cmd: list[str] = ["--json", "list-workspaces"]
         window_id = self._get_window_id()
         if window_id is not None:
@@ -161,7 +161,15 @@ class CmuxBackend:
         try:
             data = json.loads(result.stdout)
             if isinstance(data, list):
-                return data
+                normalized: list[dict[str, str]] = []
+                for ws in data:
+                    normalized.append({
+                        "terminal_id": str(ws.get("id", "")),
+                        "title": str(ws.get("title", "")),
+                        "selected": str(ws.get("selected", "")),
+                        "cwd": str(ws.get("current_directory", "")),
+                    })
+                return normalized
         except (json.JSONDecodeError, ValueError):
             pass
         return []
@@ -193,22 +201,22 @@ class CmuxBackend:
         return True, "Notification sent"
 
     def set_sidebar_status(
-        self, workspace_id: str, status: str,
+        self, terminal_id: str, status: str,
     ) -> tuple[bool, str]:
         """Set the sidebar status text for a cmux workspace."""
         result = self._run([
-            "set-status", "--workspace", workspace_id, status,
+            "set-status", "--workspace", terminal_id, status,
         ])
         if result.returncode != 0:
             return False, f"Error setting status: {result.stderr.strip()}"
         return True, f"Set status to '{status}'"
 
     def set_sidebar_progress(
-        self, workspace_id: str, progress: int,
+        self, terminal_id: str, progress: int,
     ) -> tuple[bool, str]:
         """Set the sidebar progress bar for a cmux workspace."""
         result = self._run([
-            "set-progress", "--workspace", workspace_id, str(progress),
+            "set-progress", "--workspace", terminal_id, str(progress),
         ])
         if result.returncode != 0:
             return False, f"Error setting progress: {result.stderr.strip()}"
