@@ -45,8 +45,6 @@ def get_actions_file_path(project_path: Path, worktree_dir: str) -> Path:
 
 def read_action(actions_path: Path) -> Optional[ActionRequest]:
     """Read and parse the action file. Returns None if absent or invalid."""
-    if not actions_path.exists():
-        return None
     try:
         raw = actions_path.read_text()
         if not raw.strip():

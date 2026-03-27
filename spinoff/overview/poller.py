@@ -13,14 +13,20 @@ from types import FrameType
 from typing import Optional
 
 from spinoff.backends import get_backend
-from spinoff.config import NotificationConfig, SpinoffConfig, load_config
+from spinoff.config import SpinoffConfig, load_config
 from spinoff.screen import AgentState, AgentStatus, PollScheduler, ScreenSnapshot, classify
 from spinoff.state import WorktreeEntry, WorktreeState, load_state, save_state
 from spinoff.terminal import TerminalBackend
 
 from spinoff.overview import get_cache_dir
-from spinoff.overview.actions import poll_and_dispatch_action
-from spinoff.overview.renderer import AgentSnapshot, OverviewData, render_overview
+from spinoff.overview.actions import get_actions_file_path, poll_and_dispatch_action
+from spinoff.overview.renderer import (
+    STATE_LABELS_SIDEBAR,
+    AgentSnapshot,
+    OverviewData,
+    format_duration,
+    render_overview,
+)
 from spinoff.overview.security import redact_secrets
 
 logger = logging.getLogger("spinoff.overview.poller")
@@ -72,6 +78,8 @@ class OverviewPoller:
         self._done_batch = DoneBatch()
         self._shutdown_requested = False
         self._focused_workspace: Optional[str] = None
+        self._last_sidebar_progress: dict[str, int] = {}
+        self._snapshots_changed = False
 
         cache_dir = get_cache_dir(config.project_name)
         self._html_path = cache_dir / "overview.html"
@@ -114,15 +122,9 @@ class OverviewPoller:
             return
 
         agents = [wt for wt in state.worktrees if wt.status == "active"]
-
-        # Detect focused workspace
-        self._update_focused_workspace()
-
-        # Determine due surfaces
         surface_ids = [a.terminal_id for a in agents if a.terminal_id]
         due = set(self._scheduler.surfaces_due(surface_ids))
 
-        # Prune removed worktrees
         active_names = {a.name for a in agents}
         for name in list(self._snapshots):
             if name not in active_names:
@@ -132,8 +134,10 @@ class OverviewPoller:
                 self._cooldowns.pop(name, None)
                 if snap.surface_id:
                     self._scheduler.remove(snap.surface_id)
+                    self._last_sidebar_progress.pop(snap.surface_id, None)
 
-        # Read + classify due agents
+        self._snapshots_changed = False
+        has_transitions = False
         state_changed = False
         for entry in agents:
             if not entry.terminal_id or entry.terminal_id not in due:
@@ -144,25 +148,28 @@ class OverviewPoller:
             if snapshot is not None:
                 self._scheduler.record(entry.terminal_id, snapshot.phase)
                 self._update_sidebar(snapshot)
+
+                if prev_state != snapshot.phase:
+                    has_transitions = True
                 self._dispatch_notification(snapshot, prev_state)
 
-                # Update last_status in state
                 if entry.last_status != snapshot.phase.value:
                     entry.last_status = snapshot.phase.value
                     state_changed = True
 
-        # Flush done batch
+        # Only check focused workspace when we have transitions to suppress
+        if has_transitions:
+            self._update_focused_workspace()
+
         self._flush_done_batch()
 
-        # Write HTML
-        self._write_html(list(self._snapshots.values()))
+        if self._snapshots_changed:
+            self._write_html(list(self._snapshots.values()))
 
-        # Process actions
         poll_and_dispatch_action(
             self._project_path, self._config, self._backend, state,
         )
 
-        # Save state if last_status changed
         if state_changed:
             save_state(self._project_path, state)
 
@@ -181,7 +188,6 @@ class OverviewPoller:
 
         screen_text = self._backend.read_screen(entry.terminal_id)
         if screen_text is None:
-            prev = self._previous_states.get(entry.name, AgentState.UNKNOWN)
             snap = AgentSnapshot(
                 worktree_name=entry.name,
                 phase=AgentState.SHELL,
@@ -192,6 +198,7 @@ class OverviewPoller:
                 depends_on=entry.depends_on,
             )
             self._snapshots[entry.name] = snap
+            self._snapshots_changed = True
             self._track_state(entry.name, AgentState.SHELL, now)
             return snap
 
@@ -215,6 +222,7 @@ class OverviewPoller:
             depends_on=entry.depends_on,
         )
         self._snapshots[entry.name] = snap
+        self._snapshots_changed = True
         self._track_state(entry.name, status.state, now)
         return snap
 
@@ -238,19 +246,22 @@ class OverviewPoller:
 
     def _update_sidebar(self, snapshot: AgentSnapshot) -> None:
         """Update sidebar status and progress for an agent."""
-        label = _state_label(snapshot.phase)
-        duration_str = _format_duration(int(snapshot.duration_secs))
-        status_text = f"{label} [{duration_str}]"
-
-        self._backend.set_sidebar_status(snapshot.surface_id or "", status_text)
-
         sid = snapshot.surface_id or ""
+        label = STATE_LABELS_SIDEBAR.get(snapshot.phase, snapshot.phase.value)
+        duration_str = format_duration(int(snapshot.duration_secs))
+        self._backend.set_sidebar_status(sid, f"{label} [{duration_str}]")
+
         if snapshot.phase in (AgentState.WORKING, AgentState.INITIALIZING, AgentState.WAITING_APPROVAL):
-            self._backend.set_sidebar_progress(sid, -1)
+            progress = -1
         elif snapshot.phase in (AgentState.DONE, AgentState.SHELL, AgentState.ERRORED):
-            self._backend.set_sidebar_progress(sid, 100)
+            progress = 100
         else:
-            self._backend.set_sidebar_progress(sid, 0)
+            progress = 0
+
+        # Skip redundant progress updates
+        if self._last_sidebar_progress.get(sid) != progress:
+            self._backend.set_sidebar_progress(sid, progress)
+            self._last_sidebar_progress[sid] = progress
 
     def _dispatch_notification(self, snapshot: AgentSnapshot, prev_state: AgentState) -> None:
         """Send desktop notification on state transitions."""
@@ -263,7 +274,6 @@ class OverviewPoller:
             snapshot.worktree_name, NotificationCooldown(),
         )
 
-        # Focus suppression
         if snapshot.surface_id == self._focused_workspace:
             return
 
@@ -326,7 +336,7 @@ class OverviewPoller:
                 agents=snapshots,
                 generated_at=time.strftime("%H:%M:%S"),
                 actions_file_path=str(
-                    self._project_path / self._config.worktree_dir / ".overview-actions.json"
+                    get_actions_file_path(self._project_path, self._config.worktree_dir)
                 ),
             )
             html_content = render_overview(data)
@@ -363,33 +373,6 @@ class OverviewPoller:
                 f.write(json.dumps(record) + "\n")
         except OSError:
             pass
-
-
-def _state_label(state: AgentState) -> str:
-    """Map state to sidebar label."""
-    labels = {
-        AgentState.INITIALIZING: "starting",
-        AgentState.WORKING: "working",
-        AgentState.WAITING_INPUT: "idle",
-        AgentState.WAITING_APPROVAL: "NEEDS APPROVAL",
-        AgentState.ERRORED: "ERRORED",
-        AgentState.DONE: "done",
-        AgentState.SHELL: "shell",
-        AgentState.UNKNOWN: "unknown",
-    }
-    return labels.get(state, state.value)
-
-
-def _format_duration(secs: int) -> str:
-    """Format seconds as human-readable duration."""
-    if secs < 60:
-        return f"{secs}s"
-    minutes = secs // 60
-    if minutes < 60:
-        return f"{minutes}m"
-    hours = minutes // 60
-    remaining = minutes % 60
-    return f"{hours}h{remaining}m"
 
 
 def watch(project_path: Path) -> None:

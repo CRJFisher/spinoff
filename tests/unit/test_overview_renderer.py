@@ -3,9 +3,9 @@
 import re
 
 from spinoff.screen import AgentState
+from spinoff.coordination import FileOverlap
 from spinoff.overview.renderer import (
     AgentSnapshot,
-    FileOverlap,
     OverviewData,
     render_overview,
 )
@@ -123,7 +123,7 @@ class TestStatsBar:
 
 class TestFileOverlaps:
     def test_overlaps_shown(self) -> None:
-        overlaps = [FileOverlap(file_path="src/main.py", agents=["a", "b"])]
+        overlaps = [FileOverlap(file_path="src/main.py", worktree_names=["a", "b"])]
         html = render_overview(_data(overlaps=overlaps))
         assert "File Overlaps" in html
         assert "src/main.py" in html

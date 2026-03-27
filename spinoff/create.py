@@ -26,7 +26,7 @@ from pathlib import Path
 from spinoff.backends import get_backend
 from spinoff.config import load_config
 from spinoff.sandbox import claude_available, get_claude_command
-from spinoff.state import DependencyError, add_worktree
+from spinoff.state import DependencyError, add_worktree, load_state, validate_dependencies
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -181,7 +181,6 @@ Examples:
     if args.depends_on:
         depends_on = [d.strip() for d in args.depends_on.split(",") if d.strip()] or None
     if depends_on:
-        from spinoff.state import load_state, validate_dependencies
         try:
             state = load_state(repo_root)
             validate_dependencies(state, safe_name, depends_on)

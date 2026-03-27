@@ -13,9 +13,11 @@ from pathlib import Path
 
 from spinoff.backends import get_backend
 from spinoff.config import load_config
-from spinoff.overview.security import is_safe_to_approve
 from spinoff.screen import AgentState, ScreenSnapshot, classify
-from spinoff.state import OverviewInfo, WorktreeState, load_state, save_state
+from spinoff.state import OverviewInfo, load_state, save_state
+
+from spinoff.overview.actions import ActionResult, _execute_approve
+from spinoff.overview.renderer import STATE_LABELS_CLI, format_duration
 
 
 def get_cache_dir(project_name: str) -> Path:
@@ -37,13 +39,11 @@ def open_overview(project_path: Path) -> tuple[bool, str]:
 
     state = load_state(project_path)
 
-    # Check if overview is already running
     if state.overview is not None:
         if backend.workspace_exists(state.overview.workspace_id):
             backend.focus_workspace(state.overview.workspace_id)
             return True, "Overview panel focused"
 
-    # Create new overview workspace with poller
     poller_cmd = [
         sys.executable, "-m", "spinoff.overview", "watch",
         "--project", str(project_path),
@@ -59,8 +59,8 @@ def open_overview(project_path: Path) -> tuple[bool, str]:
 
     state.overview = OverviewInfo(
         workspace_id=workspace_id,
-        surface_id=workspace_id,  # cmux uses same ID
-        pid=0,  # Poller writes its own PID after startup
+        surface_id=workspace_id,
+        pid=0,
     )
     save_state(project_path, state)
 
@@ -93,10 +93,11 @@ def cmd_status(project_path: Path) -> None:
         return
 
     backend = get_backend(config)
+    is_available = backend.available()
 
     rows: list[tuple[str, str, str, str]] = []
     for wt in state.worktrees:
-        if wt.terminal_id and backend.available():
+        if wt.terminal_id and is_available:
             screen_text = backend.read_screen(wt.terminal_id)
             if screen_text is not None:
                 snap = ScreenSnapshot(
@@ -105,23 +106,20 @@ def cmd_status(project_path: Path) -> None:
                     captured_at=time.monotonic(),
                 )
                 status = classify(snap)
-                state_label = _format_state_label(status.state)
+                state_label = STATE_LABELS_CLI.get(status.state, status.state.value)
                 rows.append((wt.name, state_label, wt.last_status or "-", status.summary[:60]))
             else:
                 rows.append((wt.name, "offline", wt.last_status or "-", "Surface unreachable"))
         else:
             rows.append((wt.name, "offline", wt.last_status or "-", "No terminal session"))
 
-    # Calculate column widths
     headers = ("Agent", "State", "Last", "Activity")
     widths = [max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
 
-    # Print header
     header_line = "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
     print(header_line)
     print("  ".join("-" * w for w in widths))
 
-    # Print rows
     for row in rows:
         print("  ".join(row[i].ljust(widths[i]) for i in range(len(row))))
 
@@ -142,47 +140,10 @@ def cmd_approve(project_path: Path, name: str) -> None:
         sys.exit(1)
 
     backend = get_backend(config)
-    screen_text = backend.read_screen(entry.terminal_id)
-    if screen_text is None:
-        print(f"Cannot read screen for '{name}'.", file=sys.stderr)
+    result: ActionResult = _execute_approve(entry.terminal_id, backend)
+
+    if not result.success:
+        print(f"Cannot approve '{name}': {result.message}", file=sys.stderr)
         sys.exit(1)
 
-    snap = ScreenSnapshot(
-        surface_id=entry.terminal_id,
-        text=screen_text,
-        captured_at=time.monotonic(),
-    )
-    status = classify(snap)
-
-    if status.state != AgentState.WAITING_APPROVAL:
-        print(f"Agent '{name}' is not waiting for approval (state: {status.state.value})")
-        print(f"Last activity: {status.summary}")
-        sys.exit(1)
-
-    # Safety check
-    safe, reason = is_safe_to_approve(screen_text)
-    if not safe:
-        print(f"Cannot auto-approve: {reason}", file=sys.stderr)
-        print("Review the prompt manually and approve in the terminal.", file=sys.stderr)
-        sys.exit(1)
-
-    # Send approval
-    backend.send_keys(entry.terminal_id, "y")
-    backend.send_keys(entry.terminal_id, "enter")
-
-    print(f"Approved: {name} -- {status.summary}")
-
-
-def _format_state_label(state: AgentState) -> str:
-    """Format state for display, uppercase for attention states."""
-    labels = {
-        AgentState.INITIALIZING: "starting",
-        AgentState.WORKING: "working",
-        AgentState.WAITING_INPUT: "idle",
-        AgentState.WAITING_APPROVAL: "WAITING",
-        AgentState.ERRORED: "ERRORED",
-        AgentState.DONE: "done",
-        AgentState.SHELL: "shell",
-        AgentState.UNKNOWN: "unknown",
-    }
-    return labels.get(state, state.value)
+    print(f"Approved: {name}")

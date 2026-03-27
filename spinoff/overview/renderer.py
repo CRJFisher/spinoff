@@ -1,10 +1,10 @@
 """HTML renderer for the overview dashboard."""
 
+import json
 from dataclasses import dataclass, field
 
+from spinoff.coordination import FileOverlap
 from spinoff.screen import AgentState
-
-import json
 
 from spinoff.overview.security import safe_html
 from spinoff.overview.template import TEMPLATE
@@ -18,17 +18,8 @@ class AgentSnapshot:
     surface_id: str | None
     snippet: str
     error_message: str = ""
-    cost_usd: float | None = None
-    token_count: int | None = None
     duration_secs: float = 0.0
     depends_on: list[str] = field(default_factory=list)
-
-
-@dataclass
-class FileOverlap:
-    """A file touched by multiple active worktrees."""
-    file_path: str
-    agents: list[str]
 
 
 @dataclass
@@ -40,6 +31,54 @@ class OverviewData:
     actions_file_path: str
     file_overlaps: list[FileOverlap] = field(default_factory=list)
     refresh_interval: int = 5
+
+
+# --- Shared display helpers (used by poller and __init__ too) ---
+
+STATE_LABELS_SIDEBAR: dict[AgentState, str] = {
+    AgentState.INITIALIZING: "starting",
+    AgentState.WORKING: "working",
+    AgentState.WAITING_INPUT: "idle",
+    AgentState.WAITING_APPROVAL: "NEEDS APPROVAL",
+    AgentState.ERRORED: "ERRORED",
+    AgentState.DONE: "done",
+    AgentState.SHELL: "shell",
+    AgentState.UNKNOWN: "unknown",
+}
+
+STATE_LABELS_DISPLAY: dict[AgentState, str] = {
+    AgentState.INITIALIZING: "Starting",
+    AgentState.WORKING: "Working",
+    AgentState.WAITING_INPUT: "Idle",
+    AgentState.WAITING_APPROVAL: "Needs Approval",
+    AgentState.ERRORED: "Errored",
+    AgentState.DONE: "Done",
+    AgentState.SHELL: "Shell",
+    AgentState.UNKNOWN: "Unknown",
+}
+
+STATE_LABELS_CLI: dict[AgentState, str] = {
+    AgentState.INITIALIZING: "starting",
+    AgentState.WORKING: "working",
+    AgentState.WAITING_INPUT: "idle",
+    AgentState.WAITING_APPROVAL: "WAITING",
+    AgentState.ERRORED: "ERRORED",
+    AgentState.DONE: "done",
+    AgentState.SHELL: "shell",
+    AgentState.UNKNOWN: "unknown",
+}
+
+
+def format_duration(secs: int) -> str:
+    """Format seconds as human-readable duration."""
+    if secs < 60:
+        return f"{secs}s"
+    minutes = secs // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    remaining = minutes % 60
+    return f"{hours}h{remaining}m"
 
 
 def render_overview(data: OverviewData) -> str:
@@ -102,9 +141,9 @@ def _build_table(agents: list[AgentSnapshot]) -> str:
     rows: list[str] = []
     for a in agents:
         badge_class = f"badge-{a.phase.value}"
-        label = _state_display_label(a.phase)
+        label = STATE_LABELS_DISPLAY.get(a.phase, a.phase.value)
         snippet = safe_html(a.snippet[:80]) if a.snippet else "-"
-        duration = _format_duration(int(a.duration_secs))
+        duration = format_duration(int(a.duration_secs))
         deps = ", ".join(safe_html(d) for d in a.depends_on) if a.depends_on else "-"
         sid = safe_html(a.surface_id or "")
         name = safe_html(a.worktree_name)
@@ -145,7 +184,7 @@ def _build_overlaps(overlaps: list[FileOverlap]) -> str:
         return ""
     items: list[str] = []
     for o in overlaps:
-        agents = ", ".join(safe_html(a) for a in o.agents)
+        agents = ", ".join(safe_html(a) for a in o.worktree_names)
         items.append(
             f'<li><span class="overlap-file">{safe_html(o.file_path)}</span> '
             f'<span class="overlap-agents">({agents})</span></li>'
@@ -155,30 +194,3 @@ def _build_overlaps(overlaps: list[FileOverlap]) -> str:
         f'<h2>File Overlaps ({len(overlaps)})</h2>'
         f'<ul>{"".join(items)}</ul></section>'
     )
-
-
-def _state_display_label(state: AgentState) -> str:
-    """Map AgentState to human-readable label."""
-    labels = {
-        AgentState.INITIALIZING: "Starting",
-        AgentState.WORKING: "Working",
-        AgentState.WAITING_INPUT: "Idle",
-        AgentState.WAITING_APPROVAL: "Needs Approval",
-        AgentState.ERRORED: "Errored",
-        AgentState.DONE: "Done",
-        AgentState.SHELL: "Shell",
-        AgentState.UNKNOWN: "Unknown",
-    }
-    return labels.get(state, state.value)
-
-
-def _format_duration(secs: int) -> str:
-    """Format seconds as human-readable duration."""
-    if secs < 60:
-        return f"{secs}s"
-    minutes = secs // 60
-    if minutes < 60:
-        return f"{minutes}m"
-    hours = minutes // 60
-    remaining = minutes % 60
-    return f"{hours}h{remaining}m"
