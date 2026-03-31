@@ -1,6 +1,8 @@
 """E2E tests for the full spinoff lifecycle."""
 
+import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +15,7 @@ pytestmark = pytest.mark.e2e
 
 
 class TestLifecycle:
-    def test_full_cycle(self, test_project, plugin_root):
+    def test_full_cycle(self, test_project: Path, plugin_root: Path) -> None:
         """Create → verify state/dir/branch/pane."""
         project = test_project
 
@@ -36,7 +38,7 @@ class TestLifecycle:
         ).stdout
         assert "worktree/cycle-test" in branches
 
-    def test_create_with_task(self, test_project, plugin_root):
+    def test_create_with_task(self, test_project: Path, plugin_root: Path) -> None:
         """Verify startup script contains the task."""
         result = run_create_worktree(
             test_project, "task-test", plugin_root,
@@ -49,7 +51,7 @@ class TestLifecycle:
         content = script.read_text()
         assert "fix the auth bug" in content
 
-    def test_create_plan_mode(self, test_project, plugin_root):
+    def test_create_plan_mode(self, test_project: Path, plugin_root: Path) -> None:
         """Verify plan mode uses --permission-mode plan in startup script."""
         result = run_create_worktree(
             test_project, "plan-test", plugin_root,
@@ -62,7 +64,7 @@ class TestLifecycle:
         assert "--permission-mode" in content
         assert "plan" in content
 
-    def test_create_with_base(self, test_project, plugin_root):
+    def test_create_with_base(self, test_project: Path, plugin_root: Path) -> None:
         """Verify --base stores base_branch correctly."""
         project = test_project
 
@@ -86,9 +88,8 @@ class TestLifecycle:
         assert entry is not None
         assert entry.base_branch == "develop"
 
-    def test_list_shows_active(self, test_project, plugin_root):
+    def test_list_shows_active(self, test_project: Path, plugin_root: Path) -> None:
         """List shows active worktrees."""
-        import os
         run_create_worktree(test_project, "list-test", plugin_root)
 
         env = {**os.environ, "PYTHONPATH": str(plugin_root)}

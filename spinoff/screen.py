@@ -50,9 +50,9 @@ Completion messages typically contain phrases like:
 
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import ClassVar, Optional
 
 
 class AgentState(Enum):
@@ -85,6 +85,18 @@ class AgentStatus:
     captured_at: float
 
 
+@dataclass
+class AgentSnapshot:
+    """In-memory ephemeral state for one agent (used by overview poller)."""
+    worktree_name: str
+    phase: AgentState
+    surface_id: str | None
+    snippet: str
+    error_message: str = ""
+    duration_secs: float = 0.0
+    depends_on: list[str] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # ANSI stripping
 # ---------------------------------------------------------------------------
@@ -107,7 +119,7 @@ def strip_ansi(text: str) -> str:
 # --- Permission / approval prompts ---
 # Claude Code shows a permission prompt when it wants to run a tool
 # that requires user approval. The prompt contains option indicators.
-PERMISSION_PATTERNS: list[re.Pattern[str]] = [
+PERMISSION_PATTERNS: tuple[re.Pattern[str], ...] = (
     # The yes/no selector with arrow indicator
     re.compile(r"[❯>]\s*(Yes|Allow|Approve)", re.IGNORECASE),
     # Permission question phrasing
@@ -118,12 +130,12 @@ PERMISSION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"wants to (run|execute|use|call)\b", re.IGNORECASE),
     # "Allow .* to" pattern
     re.compile(r"Allow .+ to (read|write|execute|run|access)", re.IGNORECASE),
-]
+)
 
 # --- Error patterns ---
 # Actual errors from Claude Code (not just the word "error" in code output).
 # These appear outside of tool-result boxes.
-ERROR_PATTERNS: list[re.Pattern[str]] = [
+ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Claude Code's own error messages
     re.compile(r"^Error:", re.MULTILINE),
     re.compile(r"^ERROR:", re.MULTILINE),
@@ -137,28 +149,28 @@ ERROR_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(unexpected error|fatal error|panic|unhandled)", re.IGNORECASE),
     # Budget exhausted
     re.compile(r"budget (exceeded|exhausted|limit)", re.IGNORECASE),
-]
+)
 
 # --- Tool call patterns ---
 # These indicate Claude is actively working (invoking tools).
-TOOL_CALL_PATTERNS: list[re.Pattern[str]] = [
+TOOL_CALL_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Box-drawing tool headers: ╭─ ToolName ─╮  or  ╭─ ToolName(args) ─╮
     re.compile(r"[╭┌]─\s*(Bash|Read|Edit|Write|Grep|Glob|Skill|WebFetch|WebSearch|NotebookEdit|TodoWrite|Agent|mcp_)"),
     # Tool result headers
     re.compile(r"[╭┌]─\s*(Bash|Read|Edit|Write|Grep|Glob|Skill|WebFetch|WebSearch|NotebookEdit|TodoWrite|Agent|mcp_)\s*(Result|Output)"),
-]
+)
 
 # --- Thinking / working indicators ---
-THINKING_PATTERNS: list[re.Pattern[str]] = [
+THINKING_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Spinner characters that Claude Code renders
     re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]"),
     # "Thinking" or "Working" text
     re.compile(r"(Thinking|Working|Processing)\.\.\.", re.IGNORECASE),
-]
+)
 
 # --- Completion indicators ---
 # Phrases Claude uses when it considers a task done.
-COMPLETION_PATTERNS: list[re.Pattern[str]] = [
+COMPLETION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"I'?ve completed", re.IGNORECASE),
     re.compile(r"I have completed", re.IGNORECASE),
     re.compile(r"task (is )?complete", re.IGNORECASE),
@@ -168,16 +180,16 @@ COMPLETION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"is there anything else", re.IGNORECASE),
     re.compile(r"I'?m done", re.IGNORECASE),
     re.compile(r"successfully (completed|merged|committed|implemented)", re.IGNORECASE),
-]
+)
 
 # --- Shell prompt (Claude exited) ---
 # After Claude exits, the startup script prints a message and drops to bash.
-SHELL_PATTERNS: list[re.Pattern[str]] = [
+SHELL_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"Claude exited\. Shell kept open"),
     re.compile(r"Build failed\. Shell kept open"),
     # Generic shell prompt at the very end of screen
     re.compile(r"^\$\s*$", re.MULTILINE),
-]
+)
 
 # --- Input prompt ---
 # Claude Code's input prompt is a ">" character at the bottom of the screen,
@@ -186,11 +198,11 @@ INPUT_PROMPT_RE = re.compile(r"^>\s*$", re.MULTILINE)
 
 # --- Initializing ---
 # Claude Code startup shows version info and loading indicators.
-INIT_PATTERNS: list[re.Pattern[str]] = [
+INIT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"Claude Code v\d+\.\d+"),
     re.compile(r"(Loading|Starting|Initializing)\s*(session|project|workspace)?", re.IGNORECASE),
     re.compile(r"Discovering MCP servers", re.IGNORECASE),
-]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +269,7 @@ def _bottom(text: str, n: int) -> str:
     return "\n".join(lines[-n:])
 
 
-def _any_match(patterns: list[re.Pattern[str]], text: str) -> Optional[re.Match[str]]:
+def _first_match(patterns: tuple[re.Pattern[str], ...], text: str) -> Optional[re.Match[str]]:
     """Return the first match from a list of patterns, or None."""
     for p in patterns:
         m = p.search(text)
@@ -409,106 +421,61 @@ def classify(snapshot: ScreenSnapshot) -> AgentStatus:
     bottom = _bottom(text, _BOTTOM_LINES)
     scan_area = _bottom(text, _SCAN_LINES)
 
-    # 1. Shell -- Claude has exited entirely
-    if _any_match(SHELL_PATTERNS, bottom):
+    def _status(state: AgentState, confidence: float, summary: str | None = None) -> AgentStatus:
         return AgentStatus(
-            state=AgentState.SHELL,
-            summary=_extract_summary(text, AgentState.SHELL),
-            confidence=0.95,
+            state=state,
+            summary=summary if summary is not None else _extract_summary(text, state),
+            confidence=confidence,
             surface_id=snapshot.surface_id,
             captured_at=snapshot.captured_at,
         )
+
+    # 1. Shell -- Claude has exited entirely
+    if _first_match(SHELL_PATTERNS, bottom):
+        return _status(AgentState.SHELL, 0.95)
 
     # 2. Initializing -- very early in the session
     # Only if we see init patterns AND no tool calls yet
-    if _any_match(INIT_PATTERNS, text) and not _any_match(TOOL_CALL_PATTERNS, text):
-        return AgentStatus(
-            state=AgentState.INITIALIZING,
-            summary=_extract_summary(text, AgentState.INITIALIZING),
-            confidence=0.8,
-            surface_id=snapshot.surface_id,
-            captured_at=snapshot.captured_at,
-        )
+    if _first_match(INIT_PATTERNS, text) and not _first_match(TOOL_CALL_PATTERNS, text):
+        return _status(AgentState.INITIALIZING, 0.8)
 
     # 3. Waiting for approval -- permission prompt in bottom of screen
-    if _any_match(PERMISSION_PATTERNS, bottom):
-        return AgentStatus(
-            state=AgentState.WAITING_APPROVAL,
-            summary=_extract_summary(text, AgentState.WAITING_APPROVAL),
-            confidence=0.9,
-            surface_id=snapshot.surface_id,
-            captured_at=snapshot.captured_at,
-        )
+    if _first_match(PERMISSION_PATTERNS, bottom):
+        return _status(AgentState.WAITING_APPROVAL, 0.9)
 
     # 4. Errored -- error patterns OUTSIDE tool result boxes
     outside_results = _extract_outside_tool_results(scan_area)
-    error_match = _any_match(ERROR_PATTERNS, outside_results)
+    error_match = _first_match(ERROR_PATTERNS, outside_results)
     if error_match:
         # Check it's not just an old error scrolled up -- it should be in the
         # bottom portion. Also check there's no input prompt below it (which
         # would mean Claude recovered and is waiting for input).
-        error_in_bottom = _any_match(ERROR_PATTERNS, _extract_outside_tool_results(bottom))
+        error_in_bottom = _first_match(ERROR_PATTERNS, _extract_outside_tool_results(bottom))
         has_prompt = bool(INPUT_PROMPT_RE.search(bottom))
         if error_in_bottom and not has_prompt:
-            return AgentStatus(
-                state=AgentState.ERRORED,
-                summary=_extract_summary(text, AgentState.ERRORED),
-                confidence=0.85,
-                surface_id=snapshot.surface_id,
-                captured_at=snapshot.captured_at,
-            )
+            return _status(AgentState.ERRORED, 0.85)
 
     # 5. Working -- tool calls or thinking indicators in bottom area
-    tool_match = _any_match(TOOL_CALL_PATTERNS, scan_area)
-    thinking_match = _any_match(THINKING_PATTERNS, bottom)
+    tool_match = _first_match(TOOL_CALL_PATTERNS, scan_area)
+    thinking_match = _first_match(THINKING_PATTERNS, bottom)
 
     # Tool call visible and no input prompt at bottom = still working
     if tool_match and not INPUT_PROMPT_RE.search(bottom):
-        return AgentStatus(
-            state=AgentState.WORKING,
-            summary=_extract_summary(text, AgentState.WORKING),
-            confidence=0.85,
-            surface_id=snapshot.surface_id,
-            captured_at=snapshot.captured_at,
-        )
+        return _status(AgentState.WORKING, 0.85)
 
     if thinking_match:
-        return AgentStatus(
-            state=AgentState.WORKING,
-            summary=_extract_summary(text, AgentState.WORKING),
-            confidence=0.8,
-            surface_id=snapshot.surface_id,
-            captured_at=snapshot.captured_at,
-        )
+        return _status(AgentState.WORKING, 0.8)
 
     # 6 & 7. Input prompt visible -- either done or waiting
     has_prompt = bool(INPUT_PROMPT_RE.search(bottom))
     if has_prompt:
-        completion_match = _any_match(COMPLETION_PATTERNS, scan_area)
+        completion_match = _first_match(COMPLETION_PATTERNS, scan_area)
         if completion_match:
-            return AgentStatus(
-                state=AgentState.DONE,
-                summary=_extract_summary(text, AgentState.DONE),
-                confidence=0.85,
-                surface_id=snapshot.surface_id,
-                captured_at=snapshot.captured_at,
-            )
-        return AgentStatus(
-            state=AgentState.WAITING_INPUT,
-            summary=_extract_summary(text, AgentState.WAITING_INPUT),
-            confidence=0.7,
-            surface_id=snapshot.surface_id,
-            captured_at=snapshot.captured_at,
-        )
+            return _status(AgentState.DONE, 0.85)
+        return _status(AgentState.WAITING_INPUT, 0.7)
 
     # 8. Unknown
-    return AgentStatus(
-        state=AgentState.UNKNOWN,
-        summary="Cannot determine agent state",
-        confidence=0.0,
-        surface_id=snapshot.surface_id,
-        captured_at=snapshot.captured_at,
-    )
+    return _status(AgentState.UNKNOWN, 0.0, summary="Cannot determine agent state")
 
 
 # ---------------------------------------------------------------------------
@@ -524,13 +491,13 @@ class PollTiming:
     last_poll: float = 0.0
     last_state: AgentState = AgentState.UNKNOWN
     consecutive_same: int = 0
-    override_interval: float = 0.0  # If non-zero, use this instead of adaptive
+    override_interval: Optional[float] = None
 
     # Interval bounds in seconds
-    MIN_INTERVAL: float = 1.0
-    MAX_INTERVAL: float = 10.0
+    MIN_INTERVAL: ClassVar[float] = 1.0
+    MAX_INTERVAL: ClassVar[float] = 10.0
     # How many consecutive same-state readings before we slow down
-    SLOWDOWN_THRESHOLD: int = 3
+    SLOWDOWN_THRESHOLD: ClassVar[int] = 3
 
     def interval(self) -> float:
         """
@@ -553,7 +520,7 @@ class PollTiming:
         Adaptive: if the state hasn't changed for SLOWDOWN_THRESHOLD polls,
         increase interval toward MAX_INTERVAL.
         """
-        if self.override_interval > 0.0:
+        if self.override_interval is not None:
             return self.override_interval
 
         base: float
@@ -592,7 +559,7 @@ class PollTiming:
 class PollScheduler:
     """Manages poll timing across multiple surfaces."""
 
-    def __init__(self, override_interval: float = 0.0) -> None:
+    def __init__(self, override_interval: Optional[float] = None) -> None:
         self._timings: dict[str, PollTiming] = {}
         self._override_interval = override_interval
 

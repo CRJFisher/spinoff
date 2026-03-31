@@ -10,18 +10,17 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType
-from typing import Optional
+from typing import ClassVar, Optional
 
 import spinoff.cmux as cmux
 from spinoff.config import SpinoffConfig, load_config
-from spinoff.screen import AgentState, AgentStatus, PollScheduler, ScreenSnapshot, classify
+from spinoff.screen import AgentSnapshot, AgentState, AgentStatus, PollScheduler, ScreenSnapshot, classify
 from spinoff.state import WorktreeEntry, WorktreeState, load_state, save_state
 
-from spinoff.overview import get_cache_dir
+from spinoff.overview import ensure_cache_dir
 from spinoff.overview.actions import get_actions_file_path, poll_and_dispatch_action
 from spinoff.overview.renderer import (
     STATE_LABELS_SIDEBAR,
-    AgentSnapshot,
     OverviewData,
     format_duration,
     render_overview,
@@ -49,7 +48,7 @@ class DoneBatch:
     """Accumulates DONE transitions for batched notification."""
     names: list[str] = field(default_factory=list)
     first_seen: float = 0.0
-    BATCH_WINDOW: float = 5.0
+    BATCH_WINDOW: ClassVar[float] = 5.0
 
     def is_ready(self, now: float) -> bool:
         return bool(self.names) and (now - self.first_seen) >= self.BATCH_WINDOW
@@ -66,7 +65,7 @@ class OverviewPoller:
         self._project_path = project_path
         self._config = config
         self._scheduler = PollScheduler(
-            override_interval=config.overview_poll_interval,
+            override_interval=config.overview_poll_interval or None,
         )
         self._snapshots: dict[str, AgentSnapshot] = {}
         self._previous_states: dict[str, AgentState] = {}
@@ -78,7 +77,7 @@ class OverviewPoller:
         self._last_sidebar_progress: dict[str, int] = {}
         self._snapshots_changed = False
 
-        cache_dir = get_cache_dir(config.project_name)
+        cache_dir = ensure_cache_dir(config.project_name)
         self._html_path = cache_dir / "overview.html"
         self._log_path = cache_dir / "overview.log"
 
@@ -97,10 +96,7 @@ class OverviewPoller:
                 logger.exception("Error in poll cycle")
                 self._log_event("cycle_error", error=traceback.format_exc()[:500])
 
-            try:
-                sleep_time = self._compute_sleep()
-            except Exception:
-                sleep_time = 1.0
+            sleep_time = self._compute_sleep()
             deadline = time.monotonic() + sleep_time
             while time.monotonic() < deadline and not self._shutdown_requested:
                 time.sleep(min(0.25, deadline - time.monotonic()))
@@ -179,7 +175,8 @@ class OverviewPoller:
 
     def _read_and_classify(self, entry: WorktreeEntry) -> Optional[AgentSnapshot]:
         """Read screen and classify agent state."""
-        assert entry.terminal_id is not None
+        if entry.terminal_id is None:
+            return None
         now = time.monotonic()
 
         screen_text = cmux.read_screen(entry.terminal_id)
@@ -230,15 +227,12 @@ class OverviewPoller:
 
     def _update_focused_workspace(self) -> None:
         """Cache the currently focused workspace ID."""
-        try:
-            workspaces = cmux.list_workspaces()
-            for ws in workspaces:
-                if ws.get("selected") in ("True", "true", "1"):
-                    self._focused_workspace = ws.get("terminal_id")
-                    return
-            self._focused_workspace = None
-        except Exception:
-            self._focused_workspace = None
+        workspaces = cmux.list_workspaces()
+        self._focused_workspace = None
+        for ws in workspaces:
+            if ws.get("selected"):
+                self._focused_workspace = str(ws.get("terminal_id", ""))
+                return
 
     def _update_sidebar(self, snapshot: AgentSnapshot) -> None:
         """Update sidebar status and progress for an agent."""

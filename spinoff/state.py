@@ -9,8 +9,7 @@ State file format (JSON):
   "window_id": "cmux-window-uuid",
   "overview": {
     "workspace_id": "ws-abc123",
-    "surface_id": "sf-def456",
-    "pid": 94210
+    "surface_id": "sf-def456"
   },
   "worktrees": [
     {
@@ -37,10 +36,6 @@ from pathlib import Path
 from typing import Optional
 
 
-class DependencyError(ValueError):
-    """Raised when dependency validation fails."""
-
-
 @dataclass
 class WorktreeEntry:
     """Represents a tracked worktree."""
@@ -54,7 +49,7 @@ class WorktreeEntry:
     summary: str = ""
     last_status: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dict for JSON output."""
         d: dict[str, object] = {
             "name": self.name,
@@ -77,16 +72,14 @@ class WorktreeEntry:
 
 @dataclass
 class OverviewInfo:
-    """Tracks the overview panel's cmux workspace, surface, and poller PID."""
+    """Tracks the overview panel's cmux workspace and surface."""
     workspace_id: str
     surface_id: str
-    pid: int
 
     def to_dict(self) -> dict[str, object]:
         return {
             "workspace_id": self.workspace_id,
             "surface_id": self.surface_id,
-            "pid": self.pid,
         }
 
 
@@ -147,7 +140,6 @@ def load_state(project_path: Path) -> WorktreeState:
             state.overview = OverviewInfo(
                 workspace_id=overview_data["workspace_id"],
                 surface_id=overview_data["surface_id"],
-                pid=overview_data["pid"],
             )
         except KeyError:
             pass  # Incomplete overview data, ignore
@@ -158,7 +150,7 @@ def load_state(project_path: Path) -> WorktreeState:
             path=wt_data["path"],
             branch=wt_data["branch"],
             base_branch=wt_data.get("base_branch"),
-            terminal_id=wt_data.get("terminal_id") or wt_data.get("pane_id"),
+            terminal_id=wt_data.get("terminal_id"),
             status=wt_data.get("status", "active"),
             depends_on=wt_data.get("depends_on", []),
             summary=wt_data.get("summary", ""),
@@ -202,9 +194,6 @@ def add_worktree(
     """Add a worktree to the state file."""
     state = load_state(project_path)
 
-    if depends_on:
-        validate_dependencies(state, name, depends_on)
-
     entry = WorktreeEntry(
         name=name,
         path=worktree_path,
@@ -218,84 +207,6 @@ def add_worktree(
     save_state(project_path, state)
     return state
 
-
-def validate_dependencies(
-    state: WorktreeState,
-    new_name: str,
-    depends_on: list[str],
-) -> None:
-    """Validate that dependencies exist and don't create cycles.
-
-    Raises:
-        DependencyError: If a referenced worktree doesn't exist or a cycle would form.
-    """
-    existing_names = {wt.name for wt in state.worktrees}
-    for dep in depends_on:
-        if dep == new_name:
-            raise DependencyError(f"Worktree '{new_name}' cannot depend on itself")
-        if dep not in existing_names:
-            raise DependencyError(
-                f"Dependency '{dep}' not found. "
-                f"Available: {', '.join(sorted(existing_names)) or '(none)'}"
-            )
-
-    graph: dict[str, list[str]] = {}
-    for wt in state.worktrees:
-        graph[wt.name] = list(wt.depends_on)
-    graph[new_name] = list(depends_on)
-
-    if _has_cycle(graph):
-        raise DependencyError(
-            f"Adding dependencies {new_name} -> {depends_on} would create a cycle"
-        )
-
-
-def _has_cycle(graph: dict[str, list[str]]) -> bool:
-    """Detect cycles via DFS with 3-color marking."""
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color: dict[str, int] = {node: WHITE for node in graph}
-
-    def dfs(node: str) -> bool:
-        color[node] = GRAY
-        for dep in graph.get(node, []):
-            if dep not in color:
-                continue
-            if color[dep] == GRAY:
-                return True
-            if color[dep] == WHITE and dfs(dep):
-                return True
-        color[node] = BLACK
-        return False
-
-    for node in graph:
-        if color[node] == WHITE:
-            if dfs(node):
-                return True
-    return False
-
-
-def topological_sort(state: WorktreeState) -> list[list[str]]:
-    """Return worktrees in merge-order layers.
-
-    Each layer contains worktrees whose dependencies are all in earlier layers.
-    """
-    all_names = {wt.name for wt in state.worktrees}
-    graph = {wt.name: [d for d in wt.depends_on if d in all_names] for wt in state.worktrees}
-
-    remaining = {name: len(deps) for name, deps in graph.items()}
-    layers: list[list[str]] = []
-
-    while remaining:
-        layer = sorted(name for name, deg in remaining.items() if deg == 0)
-        if not layer:
-            break  # cycle
-        layers.append(layer)
-        for name in layer:
-            del remaining[name]
-        for name in remaining:
-            remaining[name] = len([d for d in graph[name] if d in remaining])
-
-    return layers
 
 
 def remove_worktree(project_path: Path, name: str) -> tuple[bool, WorktreeState]:
@@ -360,18 +271,11 @@ def cmd_path(project_path: Path) -> None:
 
 if __name__ == "__main__":
     import argparse
-    import subprocess
     import sys
 
-    # Try to detect project root
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
-        default_project = Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        default_project = Path.cwd()
+    from spinoff._util import git_project_root
+
+    default_project = git_project_root()
 
     parser = argparse.ArgumentParser(
         description="Manage worktree state tracking",

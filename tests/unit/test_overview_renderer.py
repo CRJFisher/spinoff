@@ -2,11 +2,11 @@
 
 import re
 
-from spinoff.screen import AgentState
+from spinoff.screen import AgentSnapshot, AgentState
 from spinoff.coordination import FileOverlap
 from spinoff.overview.renderer import (
-    AgentSnapshot,
     OverviewData,
+    format_duration,
     render_overview,
 )
 
@@ -131,3 +131,29 @@ class TestFileOverlaps:
     def test_no_overlaps_section_when_empty(self) -> None:
         html = render_overview(_data())
         assert "File Overlaps" not in html
+
+
+class TestFormatDuration:
+    def test_seconds(self) -> None:
+        assert format_duration(0) == "0s"
+        assert format_duration(30) == "30s"
+        assert format_duration(59) == "59s"
+
+    def test_minutes(self) -> None:
+        assert format_duration(60) == "1m"
+        assert format_duration(120) == "2m"
+        assert format_duration(3599) == "59m"
+
+    def test_hours(self) -> None:
+        assert format_duration(3600) == "1h0m"
+        assert format_duration(3660) == "1h1m"
+        assert format_duration(7200) == "2h0m"
+        assert format_duration(7290) == "2h1m"
+
+    def test_boundary_60_seconds(self) -> None:
+        assert format_duration(59) == "59s"
+        assert format_duration(60) == "1m"
+
+    def test_boundary_60_minutes(self) -> None:
+        assert format_duration(3599) == "59m"
+        assert format_duration(3600) == "1h0m"

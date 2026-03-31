@@ -149,27 +149,11 @@ def _execute_approve_all(
         if wt.terminal_id is None:
             continue
 
-        screen_text = cmux.read_screen(wt.terminal_id)
-        if screen_text is None:
-            continue
-
-        snap = ScreenSnapshot(
-            surface_id=wt.terminal_id,
-            text=screen_text,
-            captured_at=time.monotonic(),
-        )
-        status = classify(snap)
-        if status.state != AgentState.WAITING_APPROVAL:
-            continue
-
-        safe, reason = is_safe_to_approve(screen_text)
-        if not safe:
-            skipped.append(f"{wt.name} ({reason})")
-            continue
-
-        cmux.send_keys(wt.terminal_id, "y")
-        cmux.send_keys(wt.terminal_id, "enter")
-        approved.append(wt.name)
+        result = _execute_approve(wt.terminal_id)
+        if result.success:
+            approved.append(wt.name)
+        elif "Not waiting" not in result.message:
+            skipped.append(f"{wt.name} ({result.message})")
 
     parts: list[str] = []
     if approved:

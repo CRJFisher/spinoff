@@ -18,12 +18,12 @@ import subprocess
 from pathlib import Path
 
 
-def _run(
+def _run_cmux(
     args: list[str],
     *,
     check: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a cmux CLI command and return the CompletedProcess."""
+    """Run a cmux CLI command and return the result."""
     return subprocess.run(
         ["cmux", *args],
         capture_output=True,
@@ -38,7 +38,7 @@ def _get_window_id() -> str | None:
     Uses ``cmux identify --json`` which returns the caller's context
     including window_id. Returns None if called from outside cmux.
     """
-    result = _run(["identify", "--json"])
+    result = _run_cmux(["identify", "--json"])
     if result.returncode != 0:
         return None
     try:
@@ -55,7 +55,7 @@ def available() -> bool:
     """Check if cmux CLI is in PATH and a cmux instance is running."""
     if shutil.which("cmux") is None:
         return False
-    result = _run(["ping"])
+    result = _run_cmux(["ping"])
     return result.returncode == 0
 
 
@@ -63,7 +63,6 @@ def create_workspace(
     title: str,
     cwd: Path | None,
     command: list[str] | None,
-    project_name: str | None,
 ) -> tuple[bool, str | None, str]:
     """Create a new cmux workspace.
 
@@ -82,7 +81,7 @@ def create_workspace(
     if cwd is not None:
         new_cmd.extend(["--cwd", str(cwd.resolve())])
 
-    result = _run(new_cmd)
+    result = _run_cmux(new_cmd)
     if result.returncode != 0:
         return False, None, f"Error creating workspace: {result.stderr.strip()}"
 
@@ -98,18 +97,22 @@ def create_workspace(
     if not workspace_id:
         return False, None, "Created workspace but could not determine its ID"
 
-    _run(["rename-workspace", "--workspace", workspace_id, title])
+    rename_result = _run_cmux(["rename-workspace", "--workspace", workspace_id, title])
+    if rename_result.returncode != 0:
+        return False, workspace_id, f"Workspace created but rename failed: {rename_result.stderr.strip()}"
 
     if command:
         command_str = " ".join(shlex.quote(c) for c in command)
-        _run(["send", "--workspace", workspace_id, command_str])
+        send_result = _run_cmux(["send", "--workspace", workspace_id, command_str])
+        if send_result.returncode != 0:
+            return False, workspace_id, f"Workspace created but send failed: {send_result.stderr.strip()}"
 
     return True, workspace_id, f"Created workspace '{title}' ({workspace_id})"
 
 
 def close_workspace(terminal_id: str) -> tuple[bool, str]:
     """Close a cmux workspace by closing its surface."""
-    result = _run(["close-surface", "--surface", terminal_id])
+    result = _run_cmux(["close-surface", "--surface", terminal_id])
     if result.returncode != 0:
         stderr = result.stderr.strip().lower()
         if "not found" in stderr or "invalid" in stderr or "no surface" in stderr:
@@ -126,7 +129,7 @@ def workspace_exists(terminal_id: str) -> bool:
 
 def set_title(terminal_id: str, title: str) -> tuple[bool, str]:
     """Set the sidebar title of a cmux workspace."""
-    result = _run([
+    result = _run_cmux([
         "rename-workspace", "--workspace", terminal_id, title,
     ])
     if result.returncode != 0:
@@ -136,30 +139,31 @@ def set_title(terminal_id: str, title: str) -> tuple[bool, str]:
 
 def focus_workspace(terminal_id: str) -> tuple[bool, str]:
     """Focus (select) a cmux workspace in the sidebar."""
-    result = _run(["select-workspace", "--workspace", terminal_id])
+    result = _run_cmux(["select-workspace", "--workspace", terminal_id])
     if result.returncode != 0:
         return False, f"Error focusing workspace: {result.stderr.strip()}"
     return True, f"Focused workspace {terminal_id}"
 
 
-def list_workspaces() -> list[dict[str, str]]:
+def list_workspaces() -> list[dict[str, object]]:
     """List all cmux workspaces in the current window, normalized."""
     cmd: list[str] = ["--json", "list-workspaces"]
     window_id = _get_window_id()
     if window_id is not None:
         cmd = ["--json", "--window", window_id, "list-workspaces"]
-    result = _run(cmd)
+    result = _run_cmux(cmd)
     if result.returncode != 0:
         return []
     try:
         data = json.loads(result.stdout)
         if isinstance(data, list):
-            normalized: list[dict[str, str]] = []
+            normalized: list[dict[str, object]] = []
             for ws in data:
+                raw_selected = ws.get("selected", "")
                 normalized.append({
                     "terminal_id": str(ws.get("id", "")),
                     "title": str(ws.get("title", "")),
-                    "selected": str(ws.get("selected", "")),
+                    "selected": str(raw_selected).lower() in ("true", "1"),
                     "cwd": str(ws.get("current_directory", "")),
                 })
             return normalized
@@ -175,7 +179,7 @@ def read_screen(
     cmd = ["read-screen", "--surface", terminal_id]
     if scrollback:
         cmd.append("--scrollback")
-    result = _run(cmd)
+    result = _run_cmux(cmd)
     if result.returncode != 0:
         return None
     return result.stdout
@@ -183,7 +187,7 @@ def read_screen(
 
 def send_keys(terminal_id: str, keys: str) -> tuple[bool, str]:
     """Send a keystroke to a cmux surface."""
-    result = _run(["send-key", "--surface", terminal_id, keys])
+    result = _run_cmux(["send-key", "--surface", terminal_id, keys])
     if result.returncode != 0:
         return False, f"Error sending keys: {result.stderr.strip()}"
     return True, f"Sent key '{keys}' to surface {terminal_id}"
@@ -191,7 +195,7 @@ def send_keys(terminal_id: str, keys: str) -> tuple[bool, str]:
 
 def notify(title: str, body: str) -> tuple[bool, str]:
     """Show a desktop notification via cmux."""
-    result = _run(["notify", "--title", title, "--body", body])
+    result = _run_cmux(["notify", "--title", title, "--body", body])
     if result.returncode != 0:
         return False, f"Error sending notification: {result.stderr.strip()}"
     return True, "Notification sent"
@@ -201,7 +205,7 @@ def set_sidebar_status(
     terminal_id: str, status: str,
 ) -> tuple[bool, str]:
     """Set the sidebar status text for a cmux workspace."""
-    result = _run([
+    result = _run_cmux([
         "set-status", "--workspace", terminal_id, status,
     ])
     if result.returncode != 0:
@@ -213,7 +217,7 @@ def set_sidebar_progress(
     terminal_id: str, progress: int,
 ) -> tuple[bool, str]:
     """Set the sidebar progress bar for a cmux workspace."""
-    result = _run([
+    result = _run_cmux([
         "set-progress", "--workspace", terminal_id, str(progress),
     ])
     if result.returncode != 0:

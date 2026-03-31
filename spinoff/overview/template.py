@@ -150,14 +150,8 @@ document.addEventListener('click', function(e) {
 function writeAction(action, surfaceId) {
     var payload = JSON.stringify({action: action, surface_id: surfaceId, timestamp: Date.now()/1000});
     if (typeof window.__cmux_write !== 'undefined') {
-        window.__cmux_write(ACTIONS_PATH, payload); return;
+        window.__cmux_write(ACTIONS_PATH, payload);
     }
-    try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/action', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(payload);
-    } catch(e) {}
 }
 </script>
 </body>

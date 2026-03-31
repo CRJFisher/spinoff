@@ -3,15 +3,14 @@
 Spinoff Configuration
 
 Loads per-project configuration from .claude/spinoff.json.
-This replaces the old placeholder-replacement pattern where values
-were baked into scripts at setup time.
 """
 # /// script
 # requires-python = ">=3.11"
 # ///
 
 import json
-from dataclasses import dataclass, field
+import sys
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 
@@ -42,6 +41,10 @@ class SpinoffConfig:
 CONFIG_FILENAME = ".claude/spinoff.json"
 
 
+class ConfigError(Exception):
+    """Raised when configuration loading fails."""
+
+
 def load_config(project_path: Path) -> SpinoffConfig:
     """
     Load spinoff configuration from .claude/spinoff.json.
@@ -53,31 +56,28 @@ def load_config(project_path: Path) -> SpinoffConfig:
         SpinoffConfig with project settings
 
     Raises:
-        SystemExit: If config file is missing
+        ConfigError: If config file is missing or malformed
     """
     config_file = project_path / CONFIG_FILENAME
 
     if not config_file.exists():
-        import sys
-        print(
-            f"Error: No spinoff config found at {config_file}\n"
-            f"Run /spinoff:init first to configure this project.",
-            file=sys.stderr,
+        raise ConfigError(
+            f"No spinoff config found at {config_file}\n"
+            f"Run /spinoff:init first to configure this project."
         )
-        sys.exit(1)
 
-    data = json.loads(config_file.read_text())
+    try:
+        data = json.loads(config_file.read_text())
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Malformed JSON in {config_file}: {exc}") from exc
 
     notif_data = data.get("notifications", {})
-    notifications = NotificationConfig(
-        desktop=notif_data.get("desktop", True),
-        flash=notif_data.get("flash", True),
-        on_done=notif_data.get("on_done", True),
-        on_error=notif_data.get("on_error", True),
-        on_waiting=notif_data.get("on_waiting", True),
-        cooldown_urgent_secs=notif_data.get("cooldown_urgent_secs", 30),
-        cooldown_info_secs=notif_data.get("cooldown_info_secs", 60),
-    )
+    defaults = NotificationConfig()
+    notif_kwargs = {
+        f.name: notif_data.get(f.name, getattr(defaults, f.name))
+        for f in fields(NotificationConfig)
+    }
+    notifications = NotificationConfig(**notif_kwargs)
 
     return SpinoffConfig(
         project_name=data["project_name"],
@@ -101,23 +101,10 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
     config_file = project_path / CONFIG_FILENAME
     config_file.parent.mkdir(parents=True, exist_ok=True)
 
-    notif = config.notifications
     notif_defaults = NotificationConfig()
-    notif_data: dict[str, bool | int] = {}
-    if notif.desktop != notif_defaults.desktop:
-        notif_data["desktop"] = notif.desktop
-    if notif.flash != notif_defaults.flash:
-        notif_data["flash"] = notif.flash
-    if notif.on_done != notif_defaults.on_done:
-        notif_data["on_done"] = notif.on_done
-    if notif.on_error != notif_defaults.on_error:
-        notif_data["on_error"] = notif.on_error
-    if notif.on_waiting != notif_defaults.on_waiting:
-        notif_data["on_waiting"] = notif.on_waiting
-    if notif.cooldown_urgent_secs != notif_defaults.cooldown_urgent_secs:
-        notif_data["cooldown_urgent_secs"] = notif.cooldown_urgent_secs
-    if notif.cooldown_info_secs != notif_defaults.cooldown_info_secs:
-        notif_data["cooldown_info_secs"] = notif.cooldown_info_secs
+    notif_current = asdict(config.notifications)
+    notif_default = asdict(notif_defaults)
+    notif_data = {k: v for k, v in notif_current.items() if v != notif_default[k]}
 
     data: dict[str, object] = {
         "project_name": config.project_name,
@@ -131,23 +118,17 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
     if config.overview_poll_interval != 0.0:
         data["overview_poll_interval"] = config.overview_poll_interval
 
-    config_file.write_text(json.dumps(data, indent=2) + "\n")
+    temp_file = config_file.with_suffix(".tmp")
+    temp_file.write_text(json.dumps(data, indent=2) + "\n")
+    temp_file.rename(config_file)
 
 
 if __name__ == "__main__":
     import argparse
-    import subprocess
-    import sys
 
-    # Try to detect project root
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
-        default_project = Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        default_project = Path.cwd()
+    from spinoff._util import git_project_root
+
+    default_project = git_project_root()
 
     parser = argparse.ArgumentParser(
         description="Manage spinoff configuration",

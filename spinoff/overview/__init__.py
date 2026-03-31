@@ -9,24 +9,30 @@ notifications, and generates an HTML dashboard.
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import spinoff.cmux as cmux
-from spinoff.config import load_config
+from spinoff.config import SpinoffConfig, load_config
 from spinoff.state import OverviewInfo, load_state, save_state
 
 
-def get_cache_dir(project_name: str) -> Path:
-    """Return the cache directory for overview files, creating if needed."""
+def ensure_cache_dir(project_name: str) -> Path:
+    """Return the cache directory for overview files, creating if needed.
+
+    Sanitizes project_name to prevent path traversal.
+    """
+    safe_name = project_name.replace("/", "-").replace("..", "-").replace("\\", "-")
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg) if xdg else Path.home() / ".cache"
-    cache_dir = base / "spinoff" / project_name
+    cache_dir = base / "spinoff" / safe_name
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
 
-def open_overview(project_path: Path) -> tuple[bool, str]:
+def open_overview(project_path: Path, config: Optional[SpinoffConfig] = None) -> tuple[bool, str]:
     """Open or focus the overview panel. Idempotent."""
-    config = load_config(project_path)
+    if config is None:
+        config = load_config(project_path)
 
     if not cmux.available():
         return False, "cmux not available"
@@ -46,7 +52,6 @@ def open_overview(project_path: Path) -> tuple[bool, str]:
         title=f"spinoff-overview-{config.project_name}",
         cwd=project_path,
         command=poller_cmd,
-        project_name=config.project_name,
     )
     if not success or workspace_id is None:
         return False, f"Failed to create overview workspace: {msg}"
@@ -54,7 +59,6 @@ def open_overview(project_path: Path) -> tuple[bool, str]:
     state.overview = OverviewInfo(
         workspace_id=workspace_id,
         surface_id=workspace_id,
-        pid=0,
     )
     save_state(project_path, state)
 
@@ -68,8 +72,10 @@ def close_overview(project_path: Path) -> tuple[bool, str]:
     if state.overview is None:
         return True, "Overview not running"
 
-    cmux.close_workspace(state.overview.workspace_id)
+    ok, msg = cmux.close_workspace(state.overview.workspace_id)
     state.overview = None
     save_state(project_path, state)
 
+    if not ok:
+        return False, f"Overview state cleared but workspace close failed: {msg}"
     return True, "Overview panel closed"

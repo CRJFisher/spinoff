@@ -122,6 +122,23 @@ class TestDispatchAction:
         mock_cmux.send_keys.assert_any_call("s1", "enter")
 
     @patch("spinoff.overview.actions.cmux")
+    def test_approve_surface_unreachable(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.read_screen.return_value = None
+        req = ActionRequest("approve", "s1", time.time())
+        result = dispatch_action(req, state_with_agents)
+        assert not result.success
+        assert "unreachable" in result.message.lower()
+
+    @patch("spinoff.overview.actions.cmux")
+    def test_approve_not_waiting(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        # Screen shows working state, not an approval prompt
+        mock_cmux.read_screen.return_value = "Claude is working on something...\n⏳ Thinking..."
+        req = ActionRequest("approve", "s1", time.time())
+        result = dispatch_action(req, state_with_agents)
+        assert not result.success
+        assert "Not waiting" in result.message
+
+    @patch("spinoff.overview.actions.cmux")
     def test_approve_blocked_by_safety(self, mock_cmux, state_with_agents: WorktreeState) -> None:
         mock_cmux.read_screen.return_value = "git push --force origin main\n❯ Yes\n  No\n"
         req = ActionRequest("approve", "s1", time.time())

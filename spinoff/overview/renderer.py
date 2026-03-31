@@ -2,24 +2,13 @@
 
 import json
 from dataclasses import dataclass, field
+from typing import Final
 
 from spinoff.coordination import FileOverlap
-from spinoff.screen import AgentState
+from spinoff.screen import AgentSnapshot, AgentState
 
-from spinoff.overview.security import safe_html
+from spinoff.overview.security import sanitize_html
 from spinoff.overview.template import TEMPLATE
-
-
-@dataclass
-class AgentSnapshot:
-    """In-memory ephemeral state for one agent."""
-    worktree_name: str
-    phase: AgentState
-    surface_id: str | None
-    snippet: str
-    error_message: str = ""
-    duration_secs: float = 0.0
-    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -35,7 +24,7 @@ class OverviewData:
 
 # --- Shared display helpers (used by poller and __init__ too) ---
 
-STATE_LABELS_SIDEBAR: dict[AgentState, str] = {
+STATE_LABELS_SIDEBAR: Final[dict[AgentState, str]] = {
     AgentState.INITIALIZING: "starting",
     AgentState.WORKING: "working",
     AgentState.WAITING_INPUT: "idle",
@@ -46,7 +35,7 @@ STATE_LABELS_SIDEBAR: dict[AgentState, str] = {
     AgentState.UNKNOWN: "unknown",
 }
 
-STATE_LABELS_DISPLAY: dict[AgentState, str] = {
+STATE_LABELS_DISPLAY: Final[dict[AgentState, str]] = {
     AgentState.INITIALIZING: "Starting",
     AgentState.WORKING: "Working",
     AgentState.WAITING_INPUT: "Idle",
@@ -89,12 +78,12 @@ def render_overview(data: OverviewData) -> str:
     overlaps_section = _build_overlaps(data.file_overlaps)
 
     return TEMPLATE.safe_substitute(
-        project_name=safe_html(data.project_name),
+        project_name=sanitize_html(data.project_name),
         refresh_interval=str(data.refresh_interval),
         total_count=str(len(data.agents)),
         stats_badges=stats_badges,
         approve_all_btn=approve_all_btn,
-        generated_at=safe_html(data.generated_at),
+        generated_at=sanitize_html(data.generated_at),
         table_content=table_content,
         overlaps_section=overlaps_section,
         actions_file_path=json.dumps(data.actions_file_path),
@@ -104,8 +93,8 @@ def render_overview(data: OverviewData) -> str:
 def _build_stats(agents: list[AgentSnapshot]) -> dict[str, int]:
     """Count agents in each state."""
     counts: dict[str, int] = {}
-    for a in agents:
-        key = a.phase.value
+    for agent in agents:
+        key = agent.phase.value
         counts[key] = counts.get(key, 0) + 1
     return counts
 
@@ -128,19 +117,19 @@ def _build_stats_badges(stats: dict[str, int]) -> str:
 def _build_table(agents: list[AgentSnapshot]) -> str:
     """Build the agent table HTML."""
     rows: list[str] = []
-    for a in agents:
-        badge_class = f"badge-{a.phase.value}"
-        label = STATE_LABELS_DISPLAY.get(a.phase, a.phase.value)
-        snippet = safe_html(a.snippet[:80]) if a.snippet else "-"
-        duration = format_duration(int(a.duration_secs))
-        deps = ", ".join(safe_html(d) for d in a.depends_on) if a.depends_on else "-"
-        sid = safe_html(a.surface_id or "")
-        name = safe_html(a.worktree_name)
+    for agent in agents:
+        badge_class = f"badge-{agent.phase.value}"
+        label = STATE_LABELS_DISPLAY.get(agent.phase, agent.phase.value)
+        snippet = sanitize_html(agent.snippet[:80]) if agent.snippet else "-"
+        duration = format_duration(int(agent.duration_secs))
+        deps = ", ".join(sanitize_html(d) for d in agent.depends_on) if agent.depends_on else "-"
+        sid = sanitize_html(agent.surface_id or "")
+        name = sanitize_html(agent.worktree_name)
 
         actions: list[str] = []
-        if a.surface_id:
+        if agent.surface_id:
             actions.append(f'<button class="btn" data-action="focus" data-sid="{sid}">Focus</button>')
-            if a.phase == AgentState.WAITING_APPROVAL:
+            if agent.phase == AgentState.WAITING_APPROVAL:
                 actions.append(f'<button class="btn btn-approve" data-action="approve" data-sid="{sid}">Approve</button>')
                 actions.append(f'<button class="btn" data-action="reject" data-sid="{sid}">Reject</button>')
             actions.append(f'<button class="btn" data-action="interrupt" data-sid="{sid}">Interrupt</button>')
@@ -150,7 +139,7 @@ def _build_table(agents: list[AgentSnapshot]) -> str:
             f'<tr data-sid="{sid}">'
             f'<td>{name}</td>'
             f'<td><span class="badge {badge_class}">{label}</span></td>'
-            f'<td class="snippet" title="{safe_html(a.snippet)}">{snippet}</td>'
+            f'<td class="snippet" title="{sanitize_html(agent.snippet)}">{snippet}</td>'
             f'<td>{duration}</td>'
             f'<td>{deps}</td>'
             f'<td class="actions">{"".join(actions)}</td>'
@@ -172,10 +161,10 @@ def _build_overlaps(overlaps: list[FileOverlap]) -> str:
     if not overlaps:
         return ""
     items: list[str] = []
-    for o in overlaps:
-        agents = ", ".join(safe_html(a) for a in o.worktree_names)
+    for overlap in overlaps:
+        agents = ", ".join(sanitize_html(name) for name in overlap.worktree_names)
         items.append(
-            f'<li><span class="overlap-file">{safe_html(o.file_path)}</span> '
+            f'<li><span class="overlap-file">{sanitize_html(overlap.file_path)}</span> '
             f'<span class="overlap-agents">({agents})</span></li>'
         )
     return (

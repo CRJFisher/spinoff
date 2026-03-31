@@ -8,6 +8,10 @@ from typing import Optional
 from spinoff.state import WorktreeEntry, WorktreeState
 
 
+class DependencyError(ValueError):
+    """Raised when dependency validation fails."""
+
+
 @dataclass
 class FileOverlap:
     """A file touched by multiple active worktrees."""
@@ -110,45 +114,80 @@ def write_dependency_context(
         return None
 
 
-def propagate_error(state: WorktreeState, errored_name: str) -> list[str]:
-    """Mark dependents of an errored worktree as paused. Returns paused names."""
-    paused: list[str] = []
-    to_visit = [errored_name]
-    visited: set[str] = set()
+def validate_dependencies(
+    state: WorktreeState,
+    new_name: str,
+    depends_on: list[str],
+) -> None:
+    """Validate that dependencies exist and don't create cycles.
 
-    while to_visit:
-        current = to_visit.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-        for wt in state.worktrees:
-            if current in wt.depends_on and wt.status == "active":
-                wt.status = "paused"
-                paused.append(wt.name)
-                to_visit.append(wt.name)
+    Raises:
+        DependencyError: If a referenced worktree doesn't exist or a cycle would form.
+    """
+    existing_names = {wt.name for wt in state.worktrees}
+    for dep in depends_on:
+        if dep == new_name:
+            raise DependencyError(f"Worktree '{new_name}' cannot depend on itself")
+        if dep not in existing_names:
+            raise DependencyError(
+                f"Dependency '{dep}' not found. "
+                f"Available: {', '.join(sorted(existing_names)) or '(none)'}"
+            )
 
-    return paused
+    graph: dict[str, list[str]] = {}
+    for wt in state.worktrees:
+        graph[wt.name] = list(wt.depends_on)
+    graph[new_name] = list(depends_on)
+
+    if _has_cycle(graph):
+        raise DependencyError(
+            f"Adding dependencies {new_name} -> {depends_on} would create a cycle"
+        )
 
 
-def propagate_recovery(state: WorktreeState, recovered_name: str) -> list[str]:
-    """Resume dependents when a previously-errored worktree recovers."""
-    resumed: list[str] = []
-    active_or_done = {
-        wt.name for wt in state.worktrees
-        if wt.status in ("active", "done")
-    }
-    active_or_done.add(recovered_name)
+def _has_cycle(graph: dict[str, list[str]]) -> bool:
+    """Detect cycles via DFS with 3-color marking."""
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[str, int] = {node: WHITE for node in graph}
 
-    changed = True
-    while changed:
-        changed = False
-        for wt in state.worktrees:
-            if wt.status != "paused":
+    def dfs(node: str) -> bool:
+        color[node] = GRAY
+        for dep in graph.get(node, []):
+            if dep not in color:
                 continue
-            if all(dep in active_or_done for dep in wt.depends_on):
-                wt.status = "active"
-                resumed.append(wt.name)
-                active_or_done.add(wt.name)
-                changed = True
+            if color[dep] == GRAY:
+                return True
+            if color[dep] == WHITE and dfs(dep):
+                return True
+        color[node] = BLACK
+        return False
 
-    return resumed
+    for node in graph:
+        if color[node] == WHITE:
+            if dfs(node):
+                return True
+    return False
+
+
+def topological_sort(state: WorktreeState) -> list[list[str]]:
+    """Return worktrees in merge-order layers.
+
+    Each layer contains worktrees whose dependencies are all in earlier layers.
+    """
+    all_names = {wt.name for wt in state.worktrees}
+    graph = {wt.name: [d for d in wt.depends_on if d in all_names] for wt in state.worktrees}
+
+    remaining = {name: len(deps) for name, deps in graph.items()}
+    layers: list[list[str]] = []
+
+    while remaining:
+        layer = sorted(name for name, deg in remaining.items() if deg == 0)
+        if not layer:
+            break  # cycle
+        layers.append(layer)
+        for name in layer:
+            del remaining[name]
+        for name in remaining:
+            remaining[name] = len([d for d in graph[name] if d in remaining])
+
+    return layers

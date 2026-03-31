@@ -3,14 +3,7 @@
 Sandbox Configuration for Worktrees
 
 Configures Claude Code's built-in sandbox via --settings CLI flag.
-This replaces the previous Docker/sandbox-exec approach with near-zero overhead.
-
-Key advantages:
-- ~0 RAM overhead (vs ~6GB for Docker)
-- Instant startup (vs seconds for Docker)
-- Native Keychain access for OAuth tokens
-- No external dependencies (built into Claude Code)
-- No settings.json files to accidentally commit (sandbox via CLI flag)
+Sandbox is enabled per-worktree with zero overhead and no external dependencies.
 """
 # /// script
 # requires-python = ">=3.11"
@@ -18,7 +11,7 @@ Key advantages:
 
 import json
 import shutil
-from typing import Optional
+from typing import Literal, Optional
 
 
 def claude_available() -> bool:
@@ -36,7 +29,7 @@ COMMIT_INSTRUCTIONS = (
 )
 
 
-def get_claude_command(task: Optional[str] = None, mode: str = "implement", model: Optional[str] = None) -> list[str]:
+def get_claude_command(task: Optional[str] = None, mode: Literal["plan", "implement"] = "implement", model: Optional[str] = None) -> list[str]:
     """
     Get claude command for interactive session.
 

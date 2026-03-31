@@ -1,23 +1,16 @@
 """CLI entry point for spinoff.overview."""
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 
+from spinoff._util import git_project_root
 from spinoff.overview import close_overview, open_overview
 from spinoff.overview.poller import watch
 
 
 def main() -> None:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        )
-        default_project = Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        default_project = Path.cwd()
+    default_project = git_project_root()
 
     parser = argparse.ArgumentParser(
         description="Spinoff overview panel",

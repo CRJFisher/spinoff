@@ -24,10 +24,11 @@ import sys
 from pathlib import Path
 
 import spinoff.cmux as cmux
-from spinoff.config import load_config
+from spinoff.config import ConfigError, load_config
 from spinoff.sandbox import claude_available, get_claude_command
 from spinoff.overview import open_overview
-from spinoff.state import DependencyError, add_worktree, load_state, validate_dependencies
+from spinoff.coordination import DependencyError, validate_dependencies
+from spinoff.state import add_worktree, load_state
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -103,7 +104,7 @@ def write_startup_script(
     return script_path
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create a worktree for parallel development (terminal + Claude sandbox)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -145,13 +146,21 @@ Examples:
         sys.exit(1)
 
     # Get repo root
-    repo_root = Path(subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, check=True
-    ).stdout.strip())
+    try:
+        repo_root = Path(subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True
+        ).stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Error: Not inside a git repository", file=sys.stderr)
+        sys.exit(1)
 
     # Load project config
-    config = load_config(repo_root)
+    try:
+        config = load_config(repo_root)
+    except ConfigError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Check cmux availability
     if not cmux.available():
@@ -185,18 +194,26 @@ Examples:
             sys.exit(1)
 
     # Get base branch
-    base = args.base or subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, check=True
-    ).stdout.strip()
+    try:
+        base = args.base or subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Error: Could not determine current branch", file=sys.stderr)
+        sys.exit(1)
 
     # Create worktree
     print(f"Creating worktree: {safe_name} (from {base})")
     (repo_root / config.worktree_dir).mkdir(exist_ok=True)
-    subprocess.run(
-        ["git", "worktree", "add", "-b", branch_name, str(worktree_path), base],
-        check=True, cwd=repo_root
-    )
+    try:
+        subprocess.run(
+            ["git", "worktree", "add", "-b", branch_name, str(worktree_path), base],
+            check=True, cwd=repo_root
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error: git worktree add failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Copy state files
     for f in config.state_files:
@@ -212,7 +229,7 @@ Examples:
 
     # Build claude command (pass task as positional arg if provided)
     claude_cmd = get_claude_command(task=args.task, mode=mode, model=args.model)
-    tab_title = f"wt: {safe_name}"
+    workspace_title = f"wt: {safe_name}"
 
     # Generate startup script as sibling to the worktree directory
     script_path = repo_root / config.worktree_dir / f"{safe_name}.start.sh"
@@ -224,15 +241,14 @@ Examples:
     )
     if config.build_command:
         print(f"  Build will run in terminal workspace: {config.build_command}")
-    tab_cmd = [str(script_path)]
+    workspace_cmd = [str(script_path)]
 
     # Create terminal workspace for this worktree
     print("  Opening terminal workspace...")
     success, terminal_id, msg = cmux.create_workspace(
-        title=tab_title,
+        title=workspace_title,
         cwd=worktree_path,
-        command=tab_cmd,
-        project_name=config.project_name,
+        command=workspace_cmd,
     )
     if not success:
         print(f"  Warning: {msg}", file=sys.stderr)
@@ -250,7 +266,7 @@ Examples:
     )
 
     # Ensure overview panel is running
-    ok, overview_msg = open_overview(repo_root)
+    ok, overview_msg = open_overview(repo_root, config=config)
     if ok:
         print(f"  Overview: {overview_msg}")
 
@@ -264,7 +280,7 @@ Examples:
     else:
         print(f"Plan mode: read-only exploration (no sandbox)")
     if terminal_id:
-        print(f"Terminal: {tab_title} (id {terminal_id})")
+        print(f"Terminal: {workspace_title} (id {terminal_id})")
     if args.task:
         print(f"Task: {args.task}")
 

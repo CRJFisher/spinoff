@@ -85,7 +85,9 @@ class TestListWorkspaces:
         assert len(result) == 2
         assert result[0]["terminal_id"] == "ws-1"
         assert result[0]["title"] == "fix-auth"
+        assert result[0]["selected"] is True
         assert result[1]["terminal_id"] == "ws-2"
+        assert result[1]["selected"] is False
 
     @patch("spinoff.cmux.subprocess.run")
     def test_empty_on_failure(self, mock_run: MagicMock) -> None:

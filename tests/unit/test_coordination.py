@@ -3,13 +3,16 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from spinoff.coordination import (
+    DependencyError,
     FileOverlap,
     detect_file_overlaps,
     extract_completion_summary,
     get_dependents,
-    propagate_error,
-    propagate_recovery,
+    topological_sort,
+    validate_dependencies,
     write_dependency_context,
 )
 from spinoff.state import WorktreeEntry, WorktreeState
@@ -103,49 +106,85 @@ class TestWriteDependencyContext:
         assert "Summary text" in result.read_text()
 
 
-class TestPropagateError:
-    def test_pauses_direct_dependents(self) -> None:
+class TestDependencyValidation:
+    def test_valid_deps(self) -> None:
         state = WorktreeState(worktrees=[
-            _entry("a"),
-            _entry("b", depends_on=["a"]),
-            _entry("c"),
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b"),
         ])
-        paused = propagate_error(state, "a")
-        assert "b" in paused
-        assert state.find("b").status == "paused"
-        assert state.find("c").status == "active"
+        validate_dependencies(state, "c", ["a", "b"])  # Should not raise
 
-    def test_pauses_transitive_dependents(self) -> None:
+    def test_missing_dep(self) -> None:
         state = WorktreeState(worktrees=[
-            _entry("a"),
-            _entry("b", depends_on=["a"]),
-            _entry("c", depends_on=["b"]),
+            WorktreeEntry(name="a", path="p", branch="b"),
         ])
-        paused = propagate_error(state, "a")
-        assert "b" in paused
-        assert "c" in paused
+        with pytest.raises(DependencyError, match="not found"):
+            validate_dependencies(state, "c", ["a", "missing"])
 
-    def test_no_dependents(self) -> None:
-        state = WorktreeState(worktrees=[_entry("a"), _entry("b")])
-        assert propagate_error(state, "a") == []
+    def test_self_dep(self) -> None:
+        state = WorktreeState(worktrees=[])
+        with pytest.raises(DependencyError, match="itself"):
+            validate_dependencies(state, "a", ["a"])
 
-
-class TestPropagateRecovery:
-    def test_resumes_when_all_deps_active(self) -> None:
+    def test_direct_cycle(self) -> None:
         state = WorktreeState(worktrees=[
-            _entry("a"),
-            _entry("b", depends_on=["a"], status="paused"),
+            WorktreeEntry(name="a", path="p", branch="b", depends_on=["b"]),
+            WorktreeEntry(name="b", path="p", branch="b"),
         ])
-        resumed = propagate_recovery(state, "a")
-        assert "b" in resumed
-        assert state.find("b").status == "active"
+        with pytest.raises(DependencyError, match="cycle"):
+            validate_dependencies(state, "b", ["a"])
 
-    def test_stays_paused_with_other_errored_dep(self) -> None:
+    def test_indirect_cycle(self) -> None:
         state = WorktreeState(worktrees=[
-            _entry("a"),
-            _entry("x", status="errored"),
-            _entry("b", depends_on=["a", "x"], status="paused"),
+            WorktreeEntry(name="a", path="p", branch="b", depends_on=["c"]),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b"),
         ])
-        resumed = propagate_recovery(state, "a")
-        assert "b" not in resumed
-        assert state.find("b").status == "paused"
+        with pytest.raises(DependencyError, match="cycle"):
+            validate_dependencies(state, "c", ["b"])
+
+    def test_diamond_no_cycle(self) -> None:
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["a"]),
+        ])
+        validate_dependencies(state, "d", ["b", "c"])  # Should not raise
+
+
+class TestTopologicalSort:
+    def test_no_deps(self) -> None:
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b"),
+        ])
+        layers = topological_sort(state)
+        assert len(layers) == 1
+        assert sorted(layers[0]) == ["a", "b"]
+
+    def test_linear_chain(self) -> None:
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["b"]),
+        ])
+        layers = topological_sort(state)
+        assert layers == [["a"], ["b"], ["c"]]
+
+    def test_diamond(self) -> None:
+        state = WorktreeState(worktrees=[
+            WorktreeEntry(name="a", path="p", branch="b"),
+            WorktreeEntry(name="b", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="c", path="p", branch="b", depends_on=["a"]),
+            WorktreeEntry(name="d", path="p", branch="b", depends_on=["b", "c"]),
+        ])
+        layers = topological_sort(state)
+        assert layers[0] == ["a"]
+        assert sorted(layers[1]) == ["b", "c"]
+        assert layers[2] == ["d"]
+
+    def test_empty(self) -> None:
+        state = WorktreeState()
+        assert topological_sort(state) == []
+
+

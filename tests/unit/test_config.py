@@ -1,21 +1,22 @@
 """Tests for spinoff.config."""
 
 import json
+from pathlib import Path
 
 import pytest
 
-from spinoff.config import NotificationConfig, SpinoffConfig, load_config, save_config, CONFIG_FILENAME
+from spinoff.config import ConfigError, NotificationConfig, SpinoffConfig, load_config, save_config, CONFIG_FILENAME
 
 
 class TestDefaults:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         config = SpinoffConfig(project_name="my-app")
         assert config.default_mode == "implement"
         assert config.worktree_dir == ".claude/worktrees"
         assert config.build_command == ""
         assert config.state_files == []
 
-    def test_custom_values(self):
+    def test_custom_values(self) -> None:
         config = SpinoffConfig(
             project_name="app",
             state_files=[".env"],
@@ -31,13 +32,13 @@ class TestDefaults:
 
 
 class TestSaveConfig:
-    def test_save_creates_directory(self, tmp_path):
+    def test_save_creates_directory(self, tmp_path: Path) -> None:
         config = SpinoffConfig(project_name="test")
         save_config(tmp_path, config)
         assert (tmp_path / CONFIG_FILENAME).exists()
         assert (tmp_path / ".claude").is_dir()
 
-    def test_save_json_format(self, tmp_path):
+    def test_save_json_format(self, tmp_path: Path) -> None:
         config = SpinoffConfig(project_name="test")
         save_config(tmp_path, config)
         content = (tmp_path / CONFIG_FILENAME).read_text()
@@ -45,7 +46,7 @@ class TestSaveConfig:
         data = json.loads(content)
         assert data["project_name"] == "test"
 
-    def test_overwrite(self, tmp_path):
+    def test_overwrite(self, tmp_path: Path) -> None:
         save_config(tmp_path, SpinoffConfig(project_name="first"))
         save_config(tmp_path, SpinoffConfig(project_name="second"))
         data = json.loads((tmp_path / CONFIG_FILENAME).read_text())
@@ -53,7 +54,7 @@ class TestSaveConfig:
 
 
 class TestLoadConfig:
-    def test_roundtrip(self, tmp_path):
+    def test_roundtrip(self, tmp_path: Path) -> None:
         original = SpinoffConfig(
             project_name="app",
             state_files=[".env", ".env.local"],
@@ -69,7 +70,7 @@ class TestLoadConfig:
         assert loaded.worktree_dir == original.worktree_dir
         assert loaded.default_mode == original.default_mode
 
-    def test_load_missing_optional_fields(self, tmp_path):
+    def test_load_missing_optional_fields(self, tmp_path: Path) -> None:
         config_file = tmp_path / CONFIG_FILENAME
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({"project_name": "minimal"}))
@@ -80,14 +81,20 @@ class TestLoadConfig:
         assert loaded.worktree_dir == ".claude/worktrees"
         assert loaded.default_mode == "implement"
 
-    def test_load_missing_file_exits(self, tmp_path):
-        with pytest.raises(SystemExit) as exc_info:
+    def test_load_missing_file_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigError, match="No spinoff config found"):
             load_config(tmp_path)
-        assert exc_info.value.code == 1
+
+    def test_load_malformed_json_raises(self, tmp_path: Path) -> None:
+        config_file = tmp_path / CONFIG_FILENAME
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text("{bad json")
+        with pytest.raises(ConfigError, match="Malformed JSON"):
+            load_config(tmp_path)
 
 
 class TestNotificationConfig:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         nc = NotificationConfig()
         assert nc.desktop is True
         assert nc.flash is True
@@ -95,12 +102,12 @@ class TestNotificationConfig:
         assert nc.cooldown_urgent_secs == 30
         assert nc.cooldown_info_secs == 60
 
-    def test_spinoff_config_default_notifications(self):
+    def test_spinoff_config_default_notifications(self) -> None:
         config = SpinoffConfig(project_name="test")
         assert config.notifications.desktop is True
         assert config.overview_poll_interval == 0.0
 
-    def test_load_missing_notifications(self, tmp_path):
+    def test_load_missing_notifications(self, tmp_path: Path) -> None:
         config_file = tmp_path / CONFIG_FILENAME
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({"project_name": "old"}))
@@ -108,7 +115,7 @@ class TestNotificationConfig:
         assert loaded.notifications.desktop is True
         assert loaded.overview_poll_interval == 0.0
 
-    def test_load_partial_notifications(self, tmp_path):
+    def test_load_partial_notifications(self, tmp_path: Path) -> None:
         config_file = tmp_path / CONFIG_FILENAME
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({
@@ -120,7 +127,7 @@ class TestNotificationConfig:
         assert loaded.notifications.cooldown_urgent_secs == 10
         assert loaded.notifications.flash is True  # default
 
-    def test_roundtrip_with_notifications(self, tmp_path):
+    def test_roundtrip_with_notifications(self, tmp_path: Path) -> None:
         nc = NotificationConfig(desktop=False, cooldown_urgent_secs=15)
         original = SpinoffConfig(project_name="app", notifications=nc, overview_poll_interval=3.0)
         save_config(tmp_path, original)
@@ -130,14 +137,14 @@ class TestNotificationConfig:
         assert loaded.notifications.flash is True
         assert loaded.overview_poll_interval == 3.0
 
-    def test_save_omits_default_notifications(self, tmp_path):
+    def test_save_omits_default_notifications(self, tmp_path: Path) -> None:
         config = SpinoffConfig(project_name="clean")
         save_config(tmp_path, config)
         data = json.loads((tmp_path / CONFIG_FILENAME).read_text())
         assert "notifications" not in data
         assert "overview_poll_interval" not in data
 
-    def test_save_includes_non_default(self, tmp_path):
+    def test_save_includes_non_default(self, tmp_path: Path) -> None:
         nc = NotificationConfig(desktop=False)
         config = SpinoffConfig(project_name="x", notifications=nc)
         save_config(tmp_path, config)

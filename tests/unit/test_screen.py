@@ -535,8 +535,12 @@ class TestPollTimingOverride:
         t.record(AgentState.DONE)
         assert t.interval() == 2.0
 
-    def test_zero_override_uses_adaptive(self) -> None:
-        t = PollTiming(surface_id="s1", override_interval=0.0, last_state=AgentState.WORKING)
+    def test_none_override_uses_adaptive(self) -> None:
+        t = PollTiming(surface_id="s1", override_interval=None, last_state=AgentState.WORKING)
+        assert t.interval() == 1.0
+
+    def test_default_override_uses_adaptive(self) -> None:
+        t = PollTiming(surface_id="s1", last_state=AgentState.WORKING)
         assert t.interval() == 1.0
 
 

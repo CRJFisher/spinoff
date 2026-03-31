@@ -1,6 +1,7 @@
 """E2E tests for multi-project workspace isolation."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +15,7 @@ pytestmark = pytest.mark.e2e
 
 
 class TestMultiProject:
-    def test_separate_workspaces(self, test_project_pair, plugin_root):
+    def test_separate_workspaces(self, test_project_pair: tuple[Path, Path], plugin_root: Path) -> None:
         """Create spinoff in two projects, verify separate terminal windows."""
         project_a, project_b = test_project_pair
         config_a = json.loads((project_a / ".claude" / "spinoff.json").read_text())
@@ -60,7 +61,7 @@ class TestMultiProject:
         assert entry_b is not None and entry_b.terminal_id is not None
         assert entry_a.terminal_id != entry_b.terminal_id
 
-    def test_independent_state(self, test_project_pair, plugin_root):
+    def test_independent_state(self, test_project_pair: tuple[Path, Path], plugin_root: Path) -> None:
         """Each project's state file has no cross-contamination."""
         project_a, project_b = test_project_pair
 
