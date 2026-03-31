@@ -12,6 +12,7 @@ import json
 import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass
@@ -33,7 +34,7 @@ class SpinoffConfig:
     state_files: list[str] = field(default_factory=list)
     build_command: str = ""
     worktree_dir: str = ".claude/worktrees"
-    default_mode: str = "implement"
+    default_mode: Literal["plan", "implement"] = "implement"
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     overview_poll_interval: float = 0.0  # 0.0 = use adaptive
 
@@ -79,12 +80,19 @@ def load_config(project_path: Path) -> SpinoffConfig:
     }
     notifications = NotificationConfig(**notif_kwargs)
 
+    default_mode: Literal["plan", "implement"] = "implement"
+    raw_mode = data.get("default_mode")
+    if raw_mode == "plan":
+        default_mode = "plan"
+    elif raw_mode is not None and raw_mode != "implement":
+        raise ConfigError(f"Invalid default_mode '{raw_mode}' in {config_file} (must be 'plan' or 'implement')")
+
     return SpinoffConfig(
         project_name=data["project_name"],
         state_files=data.get("state_files", []),
         build_command=data.get("build_command", ""),
         worktree_dir=data.get("worktree_dir", ".claude/worktrees"),
-        default_mode=data.get("default_mode", "implement"),
+        default_mode=default_mode,
         notifications=notifications,
         overview_poll_interval=data.get("overview_poll_interval", 0.0),
     )

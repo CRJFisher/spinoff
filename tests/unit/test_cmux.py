@@ -6,6 +6,34 @@ from unittest.mock import patch, MagicMock
 import spinoff.cmux as cmux
 
 
+class TestGetWindowId:
+    @patch("spinoff.cmux.subprocess.run")
+    def test_returns_window_id(self, mock_run: MagicMock) -> None:
+        identify_json = json.dumps({"caller": {"window_id": "win-abc"}, "focused": {}})
+        mock_run.return_value = MagicMock(returncode=0, stdout=identify_json)
+        assert cmux.get_window_id() == "win-abc"
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_returns_none_on_failure(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        assert cmux.get_window_id() is None
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_returns_none_when_caller_null(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps({"caller": None}))
+        assert cmux.get_window_id() is None
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_returns_none_on_malformed_json(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="not json")
+        assert cmux.get_window_id() is None
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_returns_none_when_caller_missing_window_id(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps({"caller": {}}))
+        assert cmux.get_window_id() is None
+
+
 class TestAvailable:
     @patch("spinoff.cmux.subprocess.run")
     @patch("spinoff.cmux.shutil.which", return_value="/usr/local/bin/cmux")
@@ -99,6 +127,21 @@ class TestListWorkspaces:
         mock_run.return_value = MagicMock(returncode=0, stdout="not json")
         assert cmux.list_workspaces() == []
 
+    @patch("spinoff.cmux.subprocess.run")
+    def test_passes_window_id(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]")
+        cmux.list_workspaces(window_id="win-123")
+        call_args = mock_run.call_args[0][0]
+        assert "--window" in call_args
+        assert "win-123" in call_args
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_no_window_flag_when_none(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]")
+        cmux.list_workspaces()
+        call_args = mock_run.call_args[0][0]
+        assert "--window" not in call_args
+
 
 class TestWorkspaceExists:
     @patch("spinoff.cmux.subprocess.run")
@@ -162,6 +205,69 @@ class TestNotify:
     def test_failure(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
         success, msg = cmux.notify("title", "body")
+        assert success is False
+
+
+class TestCreateWorkspace:
+    @patch("spinoff.cmux.subprocess.run")
+    def test_passes_window_id(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"id":"ws-new"}', stderr="")
+        cmux.create_workspace(title="test", cwd=None, command=None, window_id="win-123")
+        first_call_args = mock_run.call_args_list[0][0][0]
+        assert "--window" in first_call_args
+        assert "win-123" in first_call_args
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_no_window_flag_when_none(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"id":"ws-new"}', stderr="")
+        cmux.create_workspace(title="test", cwd=None, command=None)
+        first_call_args = mock_run.call_args_list[0][0][0]
+        assert "--window" not in first_call_args
+
+
+class TestFindWorkspaceByTitle:
+    @patch("spinoff.cmux.subprocess.run")
+    def test_found(self, mock_run: MagicMock) -> None:
+        raw = [
+            {"id": "ws-1", "title": "myapp: Overview", "selected": False, "current_directory": "/tmp"},
+            {"id": "ws-2", "title": "myapp: fix-auth", "selected": True, "current_directory": "/tmp"},
+        ]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(raw))
+        result = cmux.find_workspace_by_title("myapp: Overview")
+        assert result == "ws-1"
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_not_found(self, mock_run: MagicMock) -> None:
+        raw = [{"id": "ws-2", "title": "myapp: fix-auth", "selected": True, "current_directory": "/tmp"}]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(raw))
+        result = cmux.find_workspace_by_title("myapp: Overview")
+        assert result is None
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_passes_window_id(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]")
+        cmux.find_workspace_by_title("title", window_id="win-42")
+        call_args = mock_run.call_args[0][0]
+        assert "--window" in call_args
+        assert "win-42" in call_args
+
+
+class TestReorderWorkspace:
+    @patch("spinoff.cmux.subprocess.run")
+    def test_success(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        success, msg = cmux.reorder_workspace("ws-1", 0)
+        assert success is True
+        call_args = mock_run.call_args[0][0]
+        assert "rpc" in call_args
+        assert "workspace.reorder" in call_args
+        payload = json.loads(call_args[-1])
+        assert payload == {"workspace_id": "ws-1", "index": 0}
+
+    @patch("spinoff.cmux.subprocess.run")
+    def test_failure(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stderr="error")
+        success, msg = cmux.reorder_workspace("ws-bad", 0)
         assert success is False
 
 

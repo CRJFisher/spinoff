@@ -144,7 +144,7 @@ Spinoff Created
   Location: /path/to/repo/.claude/worktrees/<task-name>
   Branch: worktree/<task-name>
   Mode: implement (sandbox + auto-commit)
-  cmux workspace: wt: <task-name>
+  cmux workspace: {project_name}: <task-name>
 ```
 
 ---

@@ -69,7 +69,10 @@ class TestOpenOverview:
     @patch("spinoff.overview.cmux")
     def test_creates_new_workspace(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
         mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
         mock_cmux.create_workspace.return_value = (True, "ws-new", "ok")
+        mock_cmux.reorder_workspace.return_value = (True, "ok")
+        mock_cmux.focus_workspace.return_value = (True, "ok")
 
         config = SpinoffConfig(project_name="test")
         ok, msg = open_overview(tmp_path, config=config)
@@ -83,6 +86,7 @@ class TestOpenOverview:
     @patch("spinoff.overview.cmux")
     def test_returns_false_on_create_failure(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
         mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
         mock_cmux.create_workspace.return_value = (False, None, "cmux error")
 
         config = SpinoffConfig(project_name="test")
@@ -93,13 +97,73 @@ class TestOpenOverview:
     @patch("spinoff.overview.cmux")
     def test_uses_passed_config(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
         mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
         mock_cmux.create_workspace.return_value = (True, "ws-1", "ok")
+        mock_cmux.reorder_workspace.return_value = (True, "ok")
+        mock_cmux.focus_workspace.return_value = (True, "ok")
 
         config = SpinoffConfig(project_name="my-app")
         open_overview(tmp_path, config=config)
 
         call_kwargs = mock_cmux.create_workspace.call_args
-        assert "my-app" in call_kwargs.kwargs.get("title", "") or "my-app" in str(call_kwargs)
+        assert "my-app: Overview" == call_kwargs.kwargs.get("title", "")
+
+    @patch("spinoff.overview.cmux")
+    def test_focuses_after_creation(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
+        mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
+        mock_cmux.create_workspace.return_value = (True, "ws-new", "ok")
+        mock_cmux.reorder_workspace.return_value = (True, "ok")
+        mock_cmux.focus_workspace.return_value = (True, "ok")
+
+        config = SpinoffConfig(project_name="test")
+        ok, _ = open_overview(tmp_path, config=config)
+        assert ok
+        mock_cmux.focus_workspace.assert_called_once_with("ws-new")
+
+    @patch("spinoff.overview.cmux")
+    def test_reorders_to_position_zero(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
+        mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
+        mock_cmux.create_workspace.return_value = (True, "ws-new", "ok")
+        mock_cmux.reorder_workspace.return_value = (True, "ok")
+        mock_cmux.focus_workspace.return_value = (True, "ok")
+
+        config = SpinoffConfig(project_name="test")
+        open_overview(tmp_path, config=config)
+        mock_cmux.reorder_workspace.assert_called_once_with("ws-new", 0)
+
+    @patch("spinoff.overview.cmux")
+    def test_title_fallback_finds_existing(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
+        mock_cmux.available.return_value = True
+        mock_cmux.workspace_exists.return_value = False
+        mock_cmux.find_workspace_by_title.return_value = "ws-found"
+        mock_cmux.focus_workspace.return_value = (True, "ok")
+
+        state = WorktreeState(overview=OverviewInfo(workspace_id="ws-stale", surface_id="ws-stale"))
+        save_state(tmp_path, state)
+
+        config = SpinoffConfig(project_name="myapp")
+        ok, msg = open_overview(tmp_path, config=config)
+        assert ok
+        mock_cmux.find_workspace_by_title.assert_called_once_with("myapp: Overview", window_id=None)
+        mock_cmux.focus_workspace.assert_called_once_with("ws-found")
+
+        reloaded = load_state(tmp_path)
+        assert reloaded.overview is not None
+        assert reloaded.overview.workspace_id == "ws-found"
+
+    @patch("spinoff.overview.cmux")
+    def test_passes_window_id(self, mock_cmux: MagicMock, tmp_path: Path) -> None:
+        mock_cmux.available.return_value = True
+        mock_cmux.find_workspace_by_title.return_value = None
+        mock_cmux.create_workspace.return_value = (True, "ws-1", "ok")
+        mock_cmux.reorder_workspace.return_value = (True, "ok")
+        mock_cmux.focus_workspace.return_value = (True, "ok")
+
+        config = SpinoffConfig(project_name="myapp")
+        open_overview(tmp_path, config=config, window_id="win-42")
+        assert mock_cmux.create_workspace.call_args.kwargs.get("window_id") == "win-42"
 
 
 class TestCloseOverview:

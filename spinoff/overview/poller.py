@@ -76,6 +76,7 @@ class OverviewPoller:
         self._focused_workspace: Optional[str] = None
         self._last_sidebar_progress: dict[str, int] = {}
         self._snapshots_changed = False
+        self._window_id: Optional[str] = load_state(project_path).window_id
 
         cache_dir = ensure_cache_dir(config.project_name)
         self._html_path = cache_dir / "overview.html"
@@ -227,7 +228,7 @@ class OverviewPoller:
 
     def _update_focused_workspace(self) -> None:
         """Cache the currently focused workspace ID."""
-        workspaces = cmux.list_workspaces()
+        workspaces = cmux.list_workspaces(window_id=self._window_id)
         self._focused_workspace = None
         for ws in workspaces:
             if ws.get("selected"):

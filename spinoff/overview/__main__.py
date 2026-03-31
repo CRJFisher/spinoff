@@ -4,9 +4,11 @@ import argparse
 import sys
 from pathlib import Path
 
+import spinoff.cmux as cmux
 from spinoff._util import git_project_root
 from spinoff.overview import close_overview, open_overview
 from spinoff.overview.poller import watch
+from spinoff.state import load_state
 
 
 def main() -> None:
@@ -44,7 +46,10 @@ Examples:
         if not ok:
             sys.exit(1)
     else:
-        ok, msg = open_overview(args.project)
+        window_id = cmux.get_window_id()
+        if window_id is None:
+            window_id = load_state(args.project).window_id
+        ok, msg = open_overview(args.project, window_id=window_id)
         print(msg)
         if not ok:
             sys.exit(1)

@@ -22,13 +22,14 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import Literal
 
 import spinoff.cmux as cmux
 from spinoff.config import ConfigError, load_config
 from spinoff.sandbox import claude_available, get_claude_command
 from spinoff.overview import open_overview
 from spinoff.coordination import DependencyError, validate_dependencies
-from spinoff.state import add_worktree, load_state
+from spinoff.state import add_worktree, load_state, save_state
 
 
 def sanitize_task_name(raw: str) -> str:
@@ -167,6 +168,11 @@ Examples:
         print("Error: cmux is not available", file=sys.stderr)
         sys.exit(1)
 
+    # Resolve window_id once: live identify → stored state → None
+    window_id = cmux.get_window_id()
+    if window_id is None:
+        window_id = load_state(repo_root).window_id
+
     # Sanitize and validate task name
     try:
         safe_name = sanitize_task_name(args.task_name)
@@ -225,11 +231,15 @@ Examples:
             print(f"  Copied: {f}")
 
     # Resolve mode: explicit flag > config default
-    mode = args.mode or config.default_mode
+    mode: Literal["plan", "implement"] = config.default_mode
+    if args.mode == "plan":
+        mode = "plan"
+    elif args.mode == "implement":
+        mode = "implement"
 
     # Build claude command (pass task as positional arg if provided)
     claude_cmd = get_claude_command(task=args.task, mode=mode, model=args.model)
-    workspace_title = f"wt: {safe_name}"
+    workspace_title = f"{config.project_name}: {safe_name}"
 
     # Generate startup script as sibling to the worktree directory
     script_path = repo_root / config.worktree_dir / f"{safe_name}.start.sh"
@@ -249,13 +259,14 @@ Examples:
         title=workspace_title,
         cwd=worktree_path,
         command=workspace_cmd,
+        window_id=window_id,
     )
     if not success:
         print(f"  Warning: {msg}", file=sys.stderr)
         terminal_id = None
 
     # Update state file
-    add_worktree(
+    state = add_worktree(
         repo_root,
         name=safe_name,
         worktree_path=str(worktree_path.relative_to(repo_root)),
@@ -264,9 +275,13 @@ Examples:
         terminal_id=terminal_id,
         depends_on=depends_on,
     )
+    # Persist window_id if newly resolved (add_worktree doesn't set it)
+    if window_id is not None and state.window_id != window_id:
+        state.window_id = window_id
+        save_state(repo_root, state)
 
     # Ensure overview panel is running
-    ok, overview_msg = open_overview(repo_root, config=config)
+    ok, overview_msg = open_overview(repo_root, config=config, window_id=window_id)
     if ok:
         print(f"  Overview: {overview_msg}")
 
@@ -275,10 +290,10 @@ Examples:
     print(f"Branch: {branch_name}")
     print(f"Mode: {mode}")
     if mode == "implement":
-        print(f"Sandbox: enabled (Claude Code built-in)")
-        print(f"Auto-commit: agent will commit before finishing")
+        print("Sandbox: enabled (Claude Code built-in)")
+        print("Auto-commit: agent will commit before finishing")
     else:
-        print(f"Plan mode: read-only exploration (no sandbox)")
+        print("Plan mode: read-only exploration (no sandbox)")
     if terminal_id:
         print(f"Terminal: {workspace_title} (id {terminal_id})")
     if args.task:

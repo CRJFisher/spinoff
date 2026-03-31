@@ -29,7 +29,11 @@ def ensure_cache_dir(project_name: str) -> Path:
     return cache_dir
 
 
-def open_overview(project_path: Path, config: Optional[SpinoffConfig] = None) -> tuple[bool, str]:
+def open_overview(
+    project_path: Path,
+    config: Optional[SpinoffConfig] = None,
+    window_id: Optional[str] = None,
+) -> tuple[bool, str]:
     """Open or focus the overview panel. Idempotent."""
     if config is None:
         config = load_config(project_path)
@@ -38,23 +42,38 @@ def open_overview(project_path: Path, config: Optional[SpinoffConfig] = None) ->
         return False, "cmux not available"
 
     state = load_state(project_path)
+    overview_title = f"{config.project_name}: Overview"
 
+    # Check stored workspace_id
     if state.overview is not None:
-        if cmux.workspace_exists(state.overview.workspace_id):
+        if cmux.workspace_exists(state.overview.workspace_id, window_id=window_id):
             cmux.focus_workspace(state.overview.workspace_id)
             return True, "Overview panel focused"
 
+    # Title-based fallback: find by title before creating new
+    existing_id = cmux.find_workspace_by_title(overview_title, window_id=window_id)
+    if existing_id is not None:
+        state.overview = OverviewInfo(workspace_id=existing_id, surface_id=existing_id)
+        save_state(project_path, state)
+        cmux.focus_workspace(existing_id)
+        return True, "Overview panel found and focused"
+
+    # Create new overview workspace
     poller_cmd = [
         sys.executable, "-m", "spinoff.overview", "watch",
         "--project", str(project_path),
     ]
     success, workspace_id, msg = cmux.create_workspace(
-        title=f"spinoff-overview-{config.project_name}",
+        title=overview_title,
         cwd=project_path,
         command=poller_cmd,
+        window_id=window_id,
     )
     if not success or workspace_id is None:
         return False, f"Failed to create overview workspace: {msg}"
+
+    cmux.reorder_workspace(workspace_id, 0)
+    cmux.focus_workspace(workspace_id)
 
     state.overview = OverviewInfo(
         workspace_id=workspace_id,

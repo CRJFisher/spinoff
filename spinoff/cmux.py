@@ -32,7 +32,7 @@ def _run_cmux(
     )
 
 
-def _get_window_id() -> str | None:
+def get_window_id() -> str | None:
     """Resolve the cmux window ID for the calling terminal.
 
     Uses ``cmux identify --json`` which returns the caller's context
@@ -63,16 +63,18 @@ def create_workspace(
     title: str,
     cwd: Path | None,
     command: list[str] | None,
+    window_id: str | None = None,
 ) -> tuple[bool, str | None, str]:
     """Create a new cmux workspace.
 
     Flow:
-    1. ``cmux identify --json`` to get caller.window_id
-    2. ``cmux [--window <id>] new-workspace [--cwd <path>]``
-    3. ``cmux rename-workspace --workspace <new_id> <title>``
-    4. If command: ``cmux send --workspace <new_id> <command>``
+    1. ``cmux [--window <id>] new-workspace [--cwd <path>]``
+    2. ``cmux rename-workspace --workspace <new_id> <title>``
+    3. If command: ``cmux send --workspace <new_id> <command>``
+
+    Args:
+        window_id: Target window. If None, cmux uses its default.
     """
-    window_id = _get_window_id()
 
     new_cmd: list[str] = []
     if window_id is not None:
@@ -121,9 +123,13 @@ def close_workspace(terminal_id: str) -> tuple[bool, str]:
     return True, f"Closed workspace (surface {terminal_id})"
 
 
-def workspace_exists(terminal_id: str) -> bool:
-    """Check if a workspace with the given ID exists."""
-    workspaces = list_workspaces()
+def workspace_exists(terminal_id: str, window_id: str | None = None) -> bool:
+    """Check if a workspace with the given ID exists.
+
+    Args:
+        window_id: Target window. If None, cmux uses its default.
+    """
+    workspaces = list_workspaces(window_id=window_id)
     return any(ws.get("terminal_id") == terminal_id for ws in workspaces)
 
 
@@ -145,10 +151,13 @@ def focus_workspace(terminal_id: str) -> tuple[bool, str]:
     return True, f"Focused workspace {terminal_id}"
 
 
-def list_workspaces() -> list[dict[str, object]]:
-    """List all cmux workspaces in the current window, normalized."""
+def list_workspaces(window_id: str | None = None) -> list[dict[str, object]]:
+    """List all cmux workspaces in a window, normalized.
+
+    Args:
+        window_id: Target window. If None, cmux uses its default.
+    """
     cmd: list[str] = ["--json", "list-workspaces"]
-    window_id = _get_window_id()
     if window_id is not None:
         cmd = ["--json", "--window", window_id, "list-workspaces"]
     result = _run_cmux(cmd)
@@ -170,6 +179,31 @@ def list_workspaces() -> list[dict[str, object]]:
     except (json.JSONDecodeError, ValueError):
         pass
     return []
+
+
+def find_workspace_by_title(
+    title: str,
+    window_id: str | None = None,
+) -> str | None:
+    """Find a workspace by exact title, returning its terminal_id or None.
+
+    Args:
+        window_id: Target window. If None, cmux uses its default.
+    """
+    for ws in list_workspaces(window_id=window_id):
+        if ws.get("title") == title:
+            tid = str(ws.get("terminal_id", ""))
+            return tid if tid else None
+    return None
+
+
+def reorder_workspace(terminal_id: str, index: int) -> tuple[bool, str]:
+    """Move a workspace to a specific sidebar position via RPC."""
+    payload = json.dumps({"workspace_id": terminal_id, "index": index})
+    result = _run_cmux(["rpc", "workspace.reorder", payload])
+    if result.returncode != 0:
+        return False, f"Error reordering workspace: {result.stderr.strip()}"
+    return True, f"Reordered workspace {terminal_id} to index {index}"
 
 
 def read_screen(

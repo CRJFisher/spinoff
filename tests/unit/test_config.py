@@ -92,6 +92,13 @@ class TestLoadConfig:
         with pytest.raises(ConfigError, match="Malformed JSON"):
             load_config(tmp_path)
 
+    def test_load_invalid_default_mode_raises(self, tmp_path: Path) -> None:
+        config_file = tmp_path / CONFIG_FILENAME
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(json.dumps({"project_name": "app", "default_mode": "fast"}))
+        with pytest.raises(ConfigError, match="Invalid default_mode"):
+            load_config(tmp_path)
+
 
 class TestNotificationConfig:
     def test_defaults(self) -> None:
