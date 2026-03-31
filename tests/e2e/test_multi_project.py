@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from spinoff.backends import get_backend
+import spinoff.cmux as cmux
 from spinoff.state import load_state
 
 from .conftest import run_create_worktree
@@ -17,12 +17,10 @@ class TestMultiProject:
     def test_separate_workspaces(self, test_project_pair, plugin_root):
         """Create spinoff in two projects, verify separate terminal windows."""
         project_a, project_b = test_project_pair
-        backend = get_backend()
-
         config_a = json.loads((project_a / ".claude" / "spinoff.json").read_text())
         config_b = json.loads((project_b / ".claude" / "spinoff.json").read_text())
 
-        workspaces_before = backend.list_workspaces()
+        workspaces_before = cmux.list_workspaces()
         ids_before = {w.get("terminal_id", "") for w in workspaces_before}
 
         # Create worktree in each project
@@ -32,7 +30,7 @@ class TestMultiProject:
         assert r2.returncode == 0, r2.stderr
 
         # Get new workspaces
-        workspaces_after = backend.list_workspaces()
+        workspaces_after = cmux.list_workspaces()
         new_workspaces = [w for w in workspaces_after
                          if w.get("terminal_id", "") not in ids_before]
 

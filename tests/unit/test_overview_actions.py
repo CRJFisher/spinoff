@@ -3,6 +3,7 @@
 import json
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -17,12 +18,6 @@ from spinoff.overview.actions import (
     read_action,
     validate_action,
 )
-from tests.unit.helpers.backends import SpyBackend
-
-
-@pytest.fixture
-def spy() -> SpyBackend:
-    return SpyBackend()
 
 
 @pytest.fixture
@@ -107,58 +102,66 @@ class TestConsumeAction:
 
 
 class TestDispatchAction:
-    def test_focus_calls_focus_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    @patch("spinoff.overview.actions.cmux")
+    def test_focus_calls_focus_workspace(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.focus_workspace.return_value = (True, "ok")
         req = ActionRequest("focus", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents)
+        result = dispatch_action(req, state_with_agents)
         assert result.success
-        calls = spy.get_calls("focus_workspace")
-        assert len(calls) == 1
-        assert calls[0].args == ("s1",)
+        mock_cmux.focus_workspace.assert_called_once_with("s1")
 
-    def test_approve_with_safe_screen(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
-        spy.set_current_screen("s1", "Do you want to proceed?\n❯ Yes\n  No\n")
+    @patch("spinoff.overview.actions.cmux")
+    def test_approve_with_safe_screen(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.read_screen.return_value = "Do you want to proceed?\n❯ Yes\n  No\n"
+        mock_cmux.send_keys.return_value = (True, "ok")
         req = ActionRequest("approve", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents)
+        result = dispatch_action(req, state_with_agents)
         assert result.success
-        send_calls = spy.get_calls("send_keys")
-        assert len(send_calls) == 2
-        assert send_calls[0].args == ("s1", "y")
-        assert send_calls[1].args == ("s1", "enter")
+        assert mock_cmux.send_keys.call_count == 2
+        mock_cmux.send_keys.assert_any_call("s1", "y")
+        mock_cmux.send_keys.assert_any_call("s1", "enter")
 
-    def test_approve_blocked_by_safety(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
-        spy.set_current_screen("s1", "git push --force origin main\n❯ Yes\n  No\n")
+    @patch("spinoff.overview.actions.cmux")
+    def test_approve_blocked_by_safety(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.read_screen.return_value = "git push --force origin main\n❯ Yes\n  No\n"
         req = ActionRequest("approve", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents)
+        result = dispatch_action(req, state_with_agents)
         assert not result.success
         assert "Blocked" in result.message
 
-    def test_reject_sends_n(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    @patch("spinoff.overview.actions.cmux")
+    def test_reject_sends_n(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.send_keys.return_value = (True, "ok")
         req = ActionRequest("reject", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents)
+        result = dispatch_action(req, state_with_agents)
         assert result.success
-        send_calls = spy.get_calls("send_keys")
-        assert send_calls[0].args == ("s1", "n")
+        mock_cmux.send_keys.assert_any_call("s1", "n")
 
-    def test_interrupt_sends_ctrl_c(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    @patch("spinoff.overview.actions.cmux")
+    def test_interrupt_sends_ctrl_c(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.send_keys.return_value = (True, "ok")
         req = ActionRequest("interrupt", "s1", time.time())
-        dispatch_action(req, spy, state_with_agents)
-        send_calls = spy.get_calls("send_keys")
-        assert send_calls[0].args == ("s1", "ctrl-c")
+        dispatch_action(req, state_with_agents)
+        mock_cmux.send_keys.assert_called_once_with("s1", "ctrl-c")
 
-    def test_kill_closes_workspace(self, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    @patch("spinoff.overview.actions.cmux")
+    def test_kill_closes_workspace(self, mock_cmux, state_with_agents: WorktreeState) -> None:
+        mock_cmux.close_workspace.return_value = (True, "ok")
         req = ActionRequest("kill", "s1", time.time())
-        result = dispatch_action(req, spy, state_with_agents)
+        result = dispatch_action(req, state_with_agents)
         assert result.success
-        assert len(spy.get_calls("close_workspace")) == 1
+        mock_cmux.close_workspace.assert_called_once_with("s1")
 
 
 class TestPollAndDispatch:
-    def test_no_action_returns_none(self, tmp_path: Path, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    def test_no_action_returns_none(self, tmp_path: Path, state_with_agents: WorktreeState) -> None:
         config_copy = SpinoffConfig(project_name="test", worktree_dir=str(tmp_path))
-        result = poll_and_dispatch_action(tmp_path, config_copy, spy, state_with_agents)
+        result = poll_and_dispatch_action(tmp_path, config_copy, state_with_agents)
         assert result is None
 
-    def test_valid_action_dispatched_and_file_consumed(self, tmp_path: Path, spy: SpyBackend, state_with_agents: WorktreeState) -> None:
+    @patch("spinoff.overview.actions.cmux")
+    def test_valid_action_dispatched_and_file_consumed(self, mock_cmux, tmp_path: Path, state_with_agents: WorktreeState) -> None:
+        mock_cmux.focus_workspace.return_value = (True, "ok")
         project = tmp_path
         wt_dir = project / ".claude" / "worktrees"
         wt_dir.mkdir(parents=True, exist_ok=True)
@@ -167,7 +170,7 @@ class TestPollAndDispatch:
             "action": "focus", "surface_id": "s1", "timestamp": time.time(),
         }))
         config = SpinoffConfig(project_name="test", worktree_dir=".claude/worktrees")
-        result = poll_and_dispatch_action(project, config, spy, state_with_agents)
+        result = poll_and_dispatch_action(project, config, state_with_agents)
         assert result is not None
         assert result.success
         assert not actions_file.exists()

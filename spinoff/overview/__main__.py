@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from spinoff.overview import close_overview, cmd_approve, cmd_status, open_overview
+from spinoff.overview import close_overview, open_overview
 from spinoff.overview.poller import watch
 
 
@@ -20,14 +20,12 @@ def main() -> None:
         default_project = Path.cwd()
 
     parser = argparse.ArgumentParser(
-        description="Spinoff overview panel and agent management",
+        description="Spinoff overview panel",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python -m spinoff.overview                    Open or focus the overview panel
   python -m spinoff.overview --close            Close the overview panel
-  python -m spinoff.overview status             Text-based agent status table
-  python -m spinoff.overview approve fix-auth   Approve an agent's pending prompt
   python -m spinoff.overview watch              Start the overview poller (internal)
 """,
     )
@@ -41,20 +39,11 @@ Examples:
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
-    subparsers.add_parser("status", help="Print agent status table")
-
-    approve_parser = subparsers.add_parser("approve", help="Approve agent permission prompt")
-    approve_parser.add_argument("name", help="Agent/worktree name")
-
     subparsers.add_parser("watch", help="Start the overview poller (internal)")
 
     args = parser.parse_args()
 
-    if args.command == "status":
-        cmd_status(args.project)
-    elif args.command == "approve":
-        cmd_approve(args.project, args.name)
-    elif args.command == "watch":
+    if args.command == "watch":
         watch(args.project)
     elif args.close:
         ok, msg = close_overview(args.project)

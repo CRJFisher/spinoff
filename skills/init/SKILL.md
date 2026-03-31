@@ -7,7 +7,7 @@ allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 
 # Spinoff Init
 
-Set up spinoff support for a project. This enables isolated parallel development environments where each spinoff gets its own branch and runs in Claude Code's native sandbox with a WezTerm tab.
+Set up spinoff support for a project. This enables isolated parallel development environments where each spinoff gets its own branch and runs in Claude Code's native sandbox with a cmux tab.
 
 ---
 
@@ -23,7 +23,7 @@ Run this command in a git repository to configure spinoff support.
 
 ## Prerequisites
 
-- **WezTerm** must be installed (the script starts it automatically if not running)
+- **cmux** must be installed and running
 
 ---
 

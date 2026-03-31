@@ -11,7 +11,7 @@
       "description": "Spin off autonomous Claude agents in isolated git worktrees with sandbox isolation",
       "version": "1.0.0",
       "category": "development",
-      "keywords": ["worktree", "git", "wezterm", "sandbox", "spinoff", "parallel agents", "isolation", "autonomous"]
+      "keywords": ["worktree", "git", "cmux", "sandbox", "spinoff", "parallel agents", "isolation", "autonomous"]
     }
   ]
 }

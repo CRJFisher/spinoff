@@ -1,17 +1,17 @@
 # spinoff
 
-A Claude Code plugin that spins off autonomous Claude agents into isolated git worktrees with WezTerm tabs and sandbox isolation.
+A Claude Code plugin that spins off autonomous Claude agents into isolated git worktrees with cmux workspaces and sandbox isolation.
 
 Each spinoff gets:
 
 - An isolated git worktree with its own branch
-- A dedicated WezTerm tab
+- A dedicated cmux workspace
 - Claude Code running in sandbox mode
 - Automatic state file copying and build setup
 
 ## Prerequisites
 
-- [WezTerm](https://wezfurlong.org/wezterm/) terminal emulator
+- [cmux](https://github.com/manaflow-ai/cmux) terminal
 - Python 3.11+
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 
@@ -72,7 +72,7 @@ Spin off a new autonomous Claude agent in an isolated worktree.
 
 ### `/spinoff:list`
 
-List all active spinoffs with their status, branch, and WezTerm pane liveness.
+List all active spinoffs with their status, branch, and cmux workspace liveness.
 
 ```
 /spinoff:list
@@ -93,8 +93,8 @@ Your repo/
 ```
 
 1. **`/spinoff:init`** detects your stack and writes `.claude/spinoff.json`
-2. **`/spinoff:new`** creates a git worktree, copies state files, tracks state in `.worktrees/.state.json`, runs the build, and opens a WezTerm tab with a sandboxed Claude agent
-3. **`/spinoff:list`** shows all tracked spinoffs and their WezTerm pane status
+2. **`/spinoff:new`** creates a git worktree, copies state files, tracks state in `.worktrees/.state.json`, runs the build, and opens a cmux workspace with a sandboxed Claude agent
+3. **`/spinoff:list`** shows all tracked spinoffs and their cmux workspace status
 
 Each spinoff runs in Claude Code's native sandbox — near-zero overhead, instant startup, no Docker required.
 

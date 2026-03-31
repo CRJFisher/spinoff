@@ -4,7 +4,7 @@ After setup, the user can use these slash commands in Claude Code:
 
 ## `/spinoff:new <task-name>`
 
-Creates a new spinoff with sandbox isolation and WezTerm tab.
+Creates a new spinoff with sandbox isolation and cmux workspace.
 
 ```
 /spinoff:new fix-auth-bug
@@ -26,13 +26,13 @@ Creates a new spinoff with sandbox isolation and WezTerm tab.
 1. Creates git worktree at `.claude/worktrees/<task-name>`
 2. Creates branch `worktree/<task-name>`
 3. Copies state files and runs build command
-4. Opens WezTerm tab with Claude agent in the selected mode:
+4. Opens cmux workspace with Claude agent in the selected mode:
    - **plan**: Read-only exploration (`--permission-mode plan`, no sandbox)
    - **implement**: Sandboxed execution with auto-commit instructions
 
 ## `/spinoff:list`
 
-Lists all tracked spinoffs with their status and WezTerm pane liveness.
+Lists all tracked spinoffs with their status and cmux workspace liveness.
 
 ## `/spinoff:init`
 

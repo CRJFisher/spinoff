@@ -35,7 +35,6 @@ class SpinoffConfig:
     build_command: str = ""
     worktree_dir: str = ".claude/worktrees"
     default_mode: str = "implement"
-    terminal_backend: str = ""
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     overview_poll_interval: float = 0.0  # 0.0 = use adaptive
 
@@ -86,7 +85,6 @@ def load_config(project_path: Path) -> SpinoffConfig:
         build_command=data.get("build_command", ""),
         worktree_dir=data.get("worktree_dir", ".claude/worktrees"),
         default_mode=data.get("default_mode", "implement"),
-        terminal_backend=data.get("terminal_backend", ""),
         notifications=notifications,
         overview_poll_interval=data.get("overview_poll_interval", 0.0),
     )
@@ -127,7 +125,6 @@ def save_config(project_path: Path, config: SpinoffConfig) -> None:
         "build_command": config.build_command,
         "worktree_dir": config.worktree_dir,
         "default_mode": config.default_mode,
-        "terminal_backend": config.terminal_backend,
     }
     if notif_data:
         data["notifications"] = notif_data
@@ -181,8 +178,6 @@ Examples:
     save_parser.add_argument("--build-command", default="", help="Build command")
     save_parser.add_argument("--worktree-dir", default=".claude/worktrees", help="Worktree directory")
     save_parser.add_argument("--default-mode", default="implement", choices=["plan", "implement"], help="Default agent mode (default: implement)")
-    save_parser.add_argument("--terminal-backend", default="", choices=["", "cmux", "wezterm"], help="Terminal backend (default: auto-detect)")
-
     args = parser.parse_args()
 
     if args.command == "show":
@@ -192,7 +187,6 @@ Examples:
         print(f"Build command: {config.build_command}")
         print(f"Worktree dir:  {config.worktree_dir}")
         print(f"Default mode:  {config.default_mode}")
-        print(f"Terminal:      {config.terminal_backend or '(auto-detect)'}")
         print(f"Config file:   {args.project / CONFIG_FILENAME}")
     elif args.command == "save":
         config = SpinoffConfig(
@@ -201,7 +195,6 @@ Examples:
             build_command=args.build_command,
             worktree_dir=args.worktree_dir,
             default_mode=args.default_mode,
-            terminal_backend=args.terminal_backend,
         )
         save_config(args.project, config)
         print(f"Saved config to {args.project / CONFIG_FILENAME}")

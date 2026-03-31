@@ -57,17 +57,6 @@ STATE_LABELS_DISPLAY: dict[AgentState, str] = {
     AgentState.UNKNOWN: "Unknown",
 }
 
-STATE_LABELS_CLI: dict[AgentState, str] = {
-    AgentState.INITIALIZING: "starting",
-    AgentState.WORKING: "working",
-    AgentState.WAITING_INPUT: "idle",
-    AgentState.WAITING_APPROVAL: "WAITING",
-    AgentState.ERRORED: "ERRORED",
-    AgentState.DONE: "done",
-    AgentState.SHELL: "shell",
-    AgentState.UNKNOWN: "unknown",
-}
-
 
 def format_duration(secs: int) -> str:
     """Format seconds as human-readable duration."""

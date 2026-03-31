@@ -1,6 +1,6 @@
 ---
 name: list
-description: List all active spinoff worktrees with their status, branch, and WezTerm pane liveness.
+description: List all active spinoff worktrees with their status, branch, and cmux workspace liveness.
 context: fork
 disable-model-invocation: true
 allowed-tools: Bash(python *), Bash(PYTHONPATH=*)
@@ -36,12 +36,12 @@ The current state is pre-loaded above. If you need to refresh:
 PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.state list
 ```
 
-### 2. Check WezTerm pane liveness
+### 2. Check cmux workspace liveness
 
-If there are active worktrees, check which WezTerm panes are still alive:
+If there are active worktrees, check which cmux workspaces are still alive:
 
 ```bash
-PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -m spinoff.wezterm list
+PYTHONPATH="$CLAUDE_PLUGIN_ROOT" python -c "import spinoff.cmux as cmux; import json; print(json.dumps(cmux.list_workspaces(), indent=2))"
 ```
 
 ### 3. Present results
@@ -51,7 +51,7 @@ Show a table with columns:
 - **Name** — spinoff name
 - **Branch** — git branch
 - **Path** — worktree path
-- **Pane** — alive/dead (cross-reference pane IDs from state with live WezTerm panes)
+- **Workspace** — alive/dead (cross-reference terminal IDs from state with live cmux workspaces)
 
 If no spinoffs are tracked, tell the user and suggest `/spinoff:new <task-name>` to create one.
 

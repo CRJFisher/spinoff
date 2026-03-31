@@ -2,7 +2,7 @@
 """
 Spinoff Worktree Creator
 
-Creates isolated worktrees with a terminal backend (cmux or WezTerm) +
+Creates isolated worktrees with a cmux terminal workspace +
 Claude Code's built-in sandbox. Each worktree gets a sandboxed Claude
 session in its own terminal workspace.
 
@@ -23,9 +23,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from spinoff.backends import get_backend
+import spinoff.cmux as cmux
 from spinoff.config import load_config
 from spinoff.sandbox import claude_available, get_claude_command
+from spinoff.overview import open_overview
 from spinoff.state import DependencyError, add_worktree, load_state, validate_dependencies
 
 
@@ -152,14 +153,9 @@ Examples:
     # Load project config
     config = load_config(repo_root)
 
-    # Get terminal backend
-    try:
-        backend = get_backend(config)
-    except (RuntimeError, ValueError) as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-    if not backend.available():
-        print("Error: No terminal backend available", file=sys.stderr)
+    # Check cmux availability
+    if not cmux.available():
+        print("Error: cmux is not available", file=sys.stderr)
         sys.exit(1)
 
     # Sanitize and validate task name
@@ -232,7 +228,7 @@ Examples:
 
     # Create terminal workspace for this worktree
     print("  Opening terminal workspace...")
-    success, terminal_id, msg = backend.create_workspace(
+    success, terminal_id, msg = cmux.create_workspace(
         title=tab_title,
         cwd=worktree_path,
         command=tab_cmd,
@@ -252,6 +248,11 @@ Examples:
         terminal_id=terminal_id,
         depends_on=depends_on,
     )
+
+    # Ensure overview panel is running
+    ok, overview_msg = open_overview(repo_root)
+    if ok:
+        print(f"  Overview: {overview_msg}")
 
     # Print summary
     print(f"\nWorktree ready at: {worktree_path}")

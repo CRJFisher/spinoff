@@ -12,11 +12,10 @@ from pathlib import Path
 from types import FrameType
 from typing import Optional
 
-from spinoff.backends import get_backend
+import spinoff.cmux as cmux
 from spinoff.config import SpinoffConfig, load_config
 from spinoff.screen import AgentState, AgentStatus, PollScheduler, ScreenSnapshot, classify
 from spinoff.state import WorktreeEntry, WorktreeState, load_state, save_state
-from spinoff.terminal import TerminalBackend
 
 from spinoff.overview import get_cache_dir
 from spinoff.overview.actions import get_actions_file_path, poll_and_dispatch_action
@@ -63,11 +62,9 @@ class OverviewPoller:
         self,
         project_path: Path,
         config: SpinoffConfig,
-        backend: TerminalBackend,
     ) -> None:
         self._project_path = project_path
         self._config = config
-        self._backend = backend
         self._scheduler = PollScheduler(
             override_interval=config.overview_poll_interval,
         )
@@ -157,7 +154,6 @@ class OverviewPoller:
                     entry.last_status = snapshot.phase.value
                     state_changed = True
 
-        # Only check focused workspace when we have transitions to suppress
         if has_transitions:
             self._update_focused_workspace()
 
@@ -167,7 +163,7 @@ class OverviewPoller:
             self._write_html(list(self._snapshots.values()))
 
         poll_and_dispatch_action(
-            self._project_path, self._config, self._backend, state,
+            self._project_path, self._config, state,
         )
 
         if state_changed:
@@ -186,7 +182,7 @@ class OverviewPoller:
         assert entry.terminal_id is not None
         now = time.monotonic()
 
-        screen_text = self._backend.read_screen(entry.terminal_id)
+        screen_text = cmux.read_screen(entry.terminal_id)
         if screen_text is None:
             snap = AgentSnapshot(
                 worktree_name=entry.name,
@@ -235,7 +231,7 @@ class OverviewPoller:
     def _update_focused_workspace(self) -> None:
         """Cache the currently focused workspace ID."""
         try:
-            workspaces = self._backend.list_workspaces()
+            workspaces = cmux.list_workspaces()
             for ws in workspaces:
                 if ws.get("selected") in ("True", "true", "1"):
                     self._focused_workspace = ws.get("terminal_id")
@@ -249,7 +245,7 @@ class OverviewPoller:
         sid = snapshot.surface_id or ""
         label = STATE_LABELS_SIDEBAR.get(snapshot.phase, snapshot.phase.value)
         duration_str = format_duration(int(snapshot.duration_secs))
-        self._backend.set_sidebar_status(sid, f"{label} [{duration_str}]")
+        cmux.set_sidebar_status(sid, f"{label} [{duration_str}]")
 
         if snapshot.phase in (AgentState.WORKING, AgentState.INITIALIZING, AgentState.WAITING_APPROVAL):
             progress = -1
@@ -258,9 +254,8 @@ class OverviewPoller:
         else:
             progress = 0
 
-        # Skip redundant progress updates
         if self._last_sidebar_progress.get(sid) != progress:
-            self._backend.set_sidebar_progress(sid, progress)
+            cmux.set_sidebar_progress(sid, progress)
             self._last_sidebar_progress[sid] = progress
 
     def _dispatch_notification(self, snapshot: AgentSnapshot, prev_state: AgentState) -> None:
@@ -287,7 +282,7 @@ class OverviewPoller:
             if notif_config.desktop:
                 title = f"spinoff: {snapshot.worktree_name}"
                 body = snapshot.snippet[:100]
-                self._backend.notify(title, body)
+                cmux.notify(title, body)
                 cooldown.last_urgent = now
                 self._log_event(
                     "notification_sent", name=snapshot.worktree_name,
@@ -320,7 +315,7 @@ class OverviewPoller:
         else:
             body = f"{len(names)} agents done: {', '.join(names)}"
 
-        self._backend.notify("Spinoff: Completed", body)
+        cmux.notify("Spinoff: Completed", body)
 
         for name in names:
             cd = self._cooldowns.setdefault(name, NotificationCooldown())
@@ -382,11 +377,10 @@ def watch(project_path: Path) -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     config = load_config(project_path)
-    backend = get_backend(config)
 
-    if not backend.available():
-        logger.error("Terminal backend not available")
+    if not cmux.available():
+        logger.error("cmux not available")
         sys.exit(1)
 
-    poller = OverviewPoller(project_path, config, backend)
+    poller = OverviewPoller(project_path, config)
     poller.run()

@@ -48,7 +48,7 @@ class WorktreeEntry:
     path: str
     branch: str
     base_branch: Optional[str] = None  # Branch the worktree was created from
-    terminal_id: Optional[str] = None   # Terminal backend ID (may be None if closed)
+    terminal_id: Optional[str] = None   # cmux surface ID (may be None if closed)
     status: str = "active"
     depends_on: list[str] = field(default_factory=list)
     summary: str = ""

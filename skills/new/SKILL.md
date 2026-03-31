@@ -1,6 +1,6 @@
 ---
 name: new
-description: Spin off a new autonomous Claude agent in an isolated git worktree with WezTerm tab and sandbox.
+description: Spin off a new autonomous Claude agent in an isolated git worktree with cmux workspace and sandbox.
 argument-hint: <task-name> [--base <branch>] [--task <description>] [--mode <plan|implement>] [--model <model>]
 allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 ---
@@ -9,7 +9,7 @@ allowed-tools: Bash(git *), Bash(python *), Bash(PYTHONPATH=*), Read, Glob, Grep
 
 Create an isolated git worktree for parallel development on a specific task.
 
-Each spinoff runs in Claude Code's native sandbox with a dedicated WezTerm tab. This enables running multiple Claude agents in parallel on different tasks.
+Each spinoff runs in Claude Code's native sandbox with a dedicated cmux workspace. This enables running multiple Claude agents in parallel on different tasks.
 
 ---
 
@@ -104,7 +104,7 @@ Provide the user with:
 - Worktree location path
 - Branch name created
 - Mode (`plan` or `implement`)
-- WezTerm tab info
+- cmux workspace info
 - For implement mode: mention that the agent will auto-commit its work before finishing
 
 ---
@@ -119,14 +119,12 @@ If the script reports the worktree already exists:
 - Suggest alternative names (append `-v2`, date, etc.)
 - Offer to navigate to the existing worktree instead
 
-### WezTerm Not Available
+### cmux Not Available
 
-If WezTerm is not installed:
+If cmux is not installed or not running:
 
-- Inform the user to install WezTerm first
-- The spinoff infrastructure requires WezTerm for tab management
-
-Note: If WezTerm is installed but not running, the script will start it automatically.
+- Inform the user to install cmux and start it first
+- The spinoff infrastructure requires cmux for workspace management
 
 ### Git Errors
 
@@ -146,7 +144,7 @@ Spinoff Created
   Location: /path/to/repo/.claude/worktrees/<task-name>
   Branch: worktree/<task-name>
   Mode: implement (sandbox + auto-commit)
-  WezTerm tab: wt: <task-name>
+  cmux workspace: wt: <task-name>
 ```
 
 ---

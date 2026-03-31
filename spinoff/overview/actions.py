@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import spinoff.cmux as cmux
 from spinoff.config import SpinoffConfig
 from spinoff.screen import AgentState, ScreenSnapshot, classify
 from spinoff.state import WorktreeState
-from spinoff.terminal import TerminalBackend
 
 from spinoff.overview.security import is_safe_to_approve
 
@@ -84,7 +84,6 @@ def consume_action(actions_path: Path) -> None:
 
 def dispatch_action(
     request: ActionRequest,
-    backend: TerminalBackend,
     state: WorktreeState,
 ) -> ActionResult:
     """Execute a validated action."""
@@ -92,38 +91,37 @@ def dispatch_action(
     sid = request.surface_id
 
     if action == "focus":
-        ok, msg = backend.focus_workspace(sid)
+        ok, msg = cmux.focus_workspace(sid)
         return ActionResult(ok, action, sid, msg)
 
     if action == "approve":
-        return _execute_approve(sid, backend)
+        return _execute_approve(sid)
 
     if action == "reject":
-        backend.send_keys(sid, "n")
-        backend.send_keys(sid, "enter")
+        cmux.send_keys(sid, "n")
+        cmux.send_keys(sid, "enter")
         return ActionResult(True, action, sid, "Rejected")
 
     if action == "interrupt":
-        ok, msg = backend.send_keys(sid, "ctrl-c")
+        ok, msg = cmux.send_keys(sid, "ctrl-c")
         return ActionResult(ok, action, sid, msg)
 
     if action == "kill":
-        ok, msg = backend.close_workspace(sid)
+        ok, msg = cmux.close_workspace(sid)
         return ActionResult(ok, action, sid, msg)
 
     if action == "approve_all":
-        return _execute_approve_all(backend, state)
+        return _execute_approve_all(state)
 
     return ActionResult(False, action, sid, f"Unknown action: {action}")
 
 
-def _execute_approve(surface_id: str, backend: TerminalBackend) -> ActionResult:
+def _execute_approve(surface_id: str) -> ActionResult:
     """Approve a single agent's permission prompt with state + safety check."""
-    screen_text = backend.read_screen(surface_id)
+    screen_text = cmux.read_screen(surface_id)
     if screen_text is None:
         return ActionResult(False, "approve", surface_id, "Surface unreachable")
 
-    # Verify agent is actually at a permission prompt
     snap = ScreenSnapshot(
         surface_id=surface_id, text=screen_text, captured_at=time.monotonic(),
     )
@@ -135,13 +133,12 @@ def _execute_approve(surface_id: str, backend: TerminalBackend) -> ActionResult:
     if not safe:
         return ActionResult(False, "approve", surface_id, f"Blocked: {reason}")
 
-    backend.send_keys(surface_id, "y")
-    backend.send_keys(surface_id, "enter")
+    cmux.send_keys(surface_id, "y")
+    cmux.send_keys(surface_id, "enter")
     return ActionResult(True, "approve", surface_id, "Approved")
 
 
 def _execute_approve_all(
-    backend: TerminalBackend,
     state: WorktreeState,
 ) -> ActionResult:
     """Approve all WAITING agents that pass the safety filter."""
@@ -152,7 +149,7 @@ def _execute_approve_all(
         if wt.terminal_id is None:
             continue
 
-        screen_text = backend.read_screen(wt.terminal_id)
+        screen_text = cmux.read_screen(wt.terminal_id)
         if screen_text is None:
             continue
 
@@ -170,8 +167,8 @@ def _execute_approve_all(
             skipped.append(f"{wt.name} ({reason})")
             continue
 
-        backend.send_keys(wt.terminal_id, "y")
-        backend.send_keys(wt.terminal_id, "enter")
+        cmux.send_keys(wt.terminal_id, "y")
+        cmux.send_keys(wt.terminal_id, "enter")
         approved.append(wt.name)
 
     parts: list[str] = []
@@ -188,7 +185,6 @@ def _execute_approve_all(
 def poll_and_dispatch_action(
     project_path: Path,
     config: SpinoffConfig,
-    backend: TerminalBackend,
     state: WorktreeState,
 ) -> Optional[ActionResult]:
     """Read, validate, and dispatch one action. Returns None if no action pending."""
@@ -205,6 +201,6 @@ def poll_and_dispatch_action(
     try:
         if not ok:
             return ActionResult(False, request.action, request.surface_id, reason)
-        return dispatch_action(request, backend, state)
+        return dispatch_action(request, state)
     finally:
         consume_action(actions_path)
