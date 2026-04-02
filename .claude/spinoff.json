@@ -1,0 +1,7 @@
+{
+  "project_name": "spinoff",
+  "state_files": [],
+  "build_command": "",
+  "worktree_dir": ".claude/worktrees",
+  "default_mode": "implement"
+}

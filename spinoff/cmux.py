@@ -18,14 +18,39 @@ import subprocess
 from pathlib import Path
 
 
+_MACOS_APP_CLI = "/Applications/cmux.app/Contents/Resources/bin/cmux"
+
+
+def _find_cmux_binary() -> str | None:
+    """Locate the cmux CLI binary.
+
+    Checks PATH first, then the standard macOS app bundle location
+    (installed via DMG).
+    """
+    path_bin = shutil.which("cmux")
+    if path_bin is not None:
+        return path_bin
+    if Path(_MACOS_APP_CLI).is_file():
+        return _MACOS_APP_CLI
+    return None
+
+
 def _run_cmux(
     args: list[str],
     *,
     check: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run a cmux CLI command and return the result."""
+    binary = _find_cmux_binary()
+    if binary is None:
+        return subprocess.CompletedProcess(
+            args=["cmux", *args],
+            returncode=1,
+            stdout="",
+            stderr="cmux not found: not in PATH and not installed at /Applications/cmux.app",
+        )
     return subprocess.run(
-        ["cmux", *args],
+        [binary, *args],
         capture_output=True,
         text=True,
         check=check,
@@ -52,8 +77,8 @@ def get_window_id() -> str | None:
 
 
 def available() -> bool:
-    """Check if cmux CLI is in PATH and a cmux instance is running."""
-    if shutil.which("cmux") is None:
+    """Check if cmux CLI is reachable and a cmux instance is running."""
+    if _find_cmux_binary() is None:
         return False
     result = _run_cmux(["ping"])
     return result.returncode == 0
@@ -93,8 +118,12 @@ def create_workspace(
         data = json.loads(stdout)
         workspace_id = data.get("id") or data.get("workspace_id")
     except (json.JSONDecodeError, ValueError, AttributeError):
-        if stdout:
-            workspace_id = stdout
+        # cmux returns "OK workspace:N" — extract the workspace reference
+        parts = stdout.split()
+        for part in parts:
+            if part.startswith("workspace:"):
+                workspace_id = part
+                break
 
     if not workspace_id:
         return False, None, "Created workspace but could not determine its ID"
@@ -104,7 +133,7 @@ def create_workspace(
         return False, workspace_id, f"Workspace created but rename failed: {rename_result.stderr.strip()}"
 
     if command:
-        command_str = " ".join(shlex.quote(c) for c in command)
+        command_str = " ".join(shlex.quote(c) for c in command) + "\\n"
         send_result = _run_cmux(["send", "--workspace", workspace_id, command_str])
         if send_result.returncode != 0:
             return False, workspace_id, f"Workspace created but send failed: {send_result.stderr.strip()}"

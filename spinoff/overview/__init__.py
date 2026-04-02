@@ -60,8 +60,9 @@ def open_overview(
 
     # Create new overview workspace
     poller_cmd = [
-        sys.executable, "-m", "spinoff.overview", "watch",
+        sys.executable, "-m", "spinoff.overview",
         "--project", str(project_path),
+        "watch",
     ]
     success, workspace_id, msg = cmux.create_workspace(
         title=overview_title,

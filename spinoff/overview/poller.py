@@ -20,6 +20,7 @@ from spinoff.state import WorktreeEntry, WorktreeState, load_state, save_state
 from spinoff.overview import ensure_cache_dir
 from spinoff.overview.actions import get_actions_file_path, poll_and_dispatch_action
 from spinoff.overview.renderer import (
+    STATE_LABELS_DISPLAY,
     STATE_LABELS_SIDEBAR,
     OverviewData,
     format_duration,
@@ -28,6 +29,21 @@ from spinoff.overview.renderer import (
 from spinoff.overview.security import redact_secrets
 
 logger = logging.getLogger("spinoff.overview.poller")
+
+# ANSI color codes for terminal dashboard state display.
+_STATE_COLORS: dict[AgentState, str] = {
+    AgentState.WORKING: "\033[34m",           # blue
+    AgentState.WAITING_APPROVAL: "\033[33m",  # yellow
+    AgentState.ERRORED: "\033[31m",           # red
+    AgentState.DONE: "\033[32m",              # green
+    AgentState.INITIALIZING: "\033[36m",      # cyan
+    AgentState.SHELL: "\033[90m",             # gray
+    AgentState.UNKNOWN: "\033[90m",           # gray
+    AgentState.WAITING_INPUT: "\033[90m",     # gray
+}
+_ANSI_RESET = "\033[0m"
+_ANSI_BOLD = "\033[1m"
+_ANSI_DIM = "\033[2m"
 
 
 @dataclass
@@ -158,6 +174,8 @@ class OverviewPoller:
 
         if self._snapshots_changed:
             self._write_html(list(self._snapshots.values()))
+
+        self._render_terminal(list(self._snapshots.values()))
 
         poll_and_dispatch_action(
             self._project_path, self._config, state,
@@ -335,6 +353,55 @@ class OverviewPoller:
             temp.rename(self._html_path)
         except OSError as exc:
             logger.warning("Failed to write HTML: %s", exc)
+
+    def _render_terminal(self, snapshots: list[AgentSnapshot]) -> None:
+        """Clear the terminal and print a live-updating agent dashboard."""
+        lines: list[str] = []
+
+        # Header
+        timestamp = time.strftime("%H:%M:%S")
+        lines.append(
+            f"{_ANSI_BOLD}Spinoff Overview: {self._config.project_name}{_ANSI_RESET}"
+            f"  {_ANSI_DIM}{timestamp}{_ANSI_RESET}"
+        )
+        lines.append("")
+
+        if not snapshots:
+            lines.append("  No active agents")
+        else:
+            # Column headers
+            lines.append(
+                f"  {'Name':<20} {'State':<20} {'Duration':>8}  {'Activity'}"
+            )
+            lines.append(f"  {'─' * 20} {'─' * 20} {'─' * 8}  {'─' * 40}")
+
+            for snap in snapshots:
+                color = _STATE_COLORS.get(snap.phase, _ANSI_RESET)
+                label = STATE_LABELS_DISPLAY.get(snap.phase, snap.phase.value)
+                duration = format_duration(int(snap.duration_secs))
+                snippet = snap.snippet[:60] if snap.snippet else "-"
+
+                colored_state = f"{color}{label}{_ANSI_RESET}"
+                # Pad after the reset code to align columns (ANSI codes are invisible).
+                padded_state = colored_state + " " * max(0, 20 - len(label))
+
+                name = snap.worktree_name[:20]
+                lines.append(
+                    f"  {name:<20} {padded_state} {duration:>8}  {snippet}"
+                )
+
+        # Footer
+        lines.append("")
+        agent_count = len(snapshots)
+        interval = self._config.overview_poll_interval or "adaptive"
+        lines.append(
+            f"{_ANSI_DIM}{agent_count} agent(s)  |  poll: {interval}{_ANSI_RESET}"
+        )
+
+        # Clear screen, move cursor to top, print dashboard.
+        output = "\033[2J\033[H" + "\n".join(lines) + "\n"
+        sys.stdout.write(output)
+        sys.stdout.flush()
 
     def _compute_sleep(self) -> float:
         """Compute sleep duration before next cycle."""
